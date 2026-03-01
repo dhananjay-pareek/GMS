@@ -9,15 +9,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gosom/google-maps-scraper/deduper"
-	"github.com/gosom/google-maps-scraper/exiter"
-	"github.com/gosom/google-maps-scraper/leadsdb"
-	"github.com/gosom/google-maps-scraper/runner"
-	"github.com/gosom/google-maps-scraper/tlmt"
-	"github.com/gosom/scrapemate"
-	"github.com/gosom/scrapemate/adapters/writers/csvwriter"
-	"github.com/gosom/scrapemate/adapters/writers/jsonwriter"
-	"github.com/gosom/scrapemate/scrapemateapp"
+	"github.com/dhananjay-pareek/google-maps-scraper/deduper"
+	"github.com/dhananjay-pareek/google-maps-scraper/exiter"
+	"github.com/dhananjay-pareek/google-maps-scraper/leadsdb"
+	"github.com/dhananjay-pareek/google-maps-scraper/runner"
+	"github.com/dhananjay-pareek/google-maps-scraper/tlmt"
+	"github.com/dhananjay-pareek/scrapemate"
+	"github.com/dhananjay-pareek/scrapemate/adapters/writers/csvwriter"
+	"github.com/dhananjay-pareek/scrapemate/adapters/writers/jsonwriter"
+	"github.com/dhananjay-pareek/scrapemate/scrapemateapp"
 )
 
 type fileRunner struct {

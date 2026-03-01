@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/gosom/google-maps-scraper/gmaps"
-	"github.com/gosom/scrapemate"
+	"github.com/dhananjay-pareek/google-maps-scraper/gmaps"
+	"github.com/dhananjay-pareek/scrapemate"
 )
 
 var _ scrapemate.ResultWriter = (*exampleWriter)(nil)

@@ -8,10 +8,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/gosom/go-leadsdb"
-	"github.com/gosom/scrapemate"
+	"github.com/dhananjay-pareek/go-leadsdb"
+	"github.com/dhananjay-pareek/scrapemate"
 
-	"github.com/gosom/google-maps-scraper/gmaps"
+	"github.com/dhananjay-pareek/google-maps-scraper/gmaps"
 )
 
 func New(apiKey string) scrapemate.ResultWriter {

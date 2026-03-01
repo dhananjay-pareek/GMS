@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gosom/scrapemate"
-	"github.com/gosom/scrapemate/adapters/fetchers/stealth"
+	"github.com/dhananjay-pareek/scrapemate"
+	"github.com/dhananjay-pareek/scrapemate/adapters/fetchers/stealth"
 )
 
 type fetchReviewsParams struct {
