@@ -7,8 +7,8 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
-	"github.com/gosom/google-maps-scraper/exiter"
-	"github.com/gosom/scrapemate"
+	"github.com/dhananjay-pareek/google-maps-scraper/exiter"
+	"github.com/dhananjay-pareek/scrapemate"
 )
 
 type SearchJobOptions func(*SearchJob)

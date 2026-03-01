@@ -10,10 +10,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gosom/google-maps-scraper/deduper"
-	"github.com/gosom/google-maps-scraper/exiter"
-	"github.com/gosom/google-maps-scraper/gmaps"
-	"github.com/gosom/scrapemate"
+	"github.com/dhananjay-pareek/google-maps-scraper/deduper"
+	"github.com/dhananjay-pareek/google-maps-scraper/exiter"
+	"github.com/dhananjay-pareek/google-maps-scraper/gmaps"
+	"github.com/dhananjay-pareek/scrapemate"
 )
 
 func CreateSeedJobs(

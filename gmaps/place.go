@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/gosom/scrapemate"
+	"github.com/dhananjay-pareek/scrapemate"
 
-	"github.com/gosom/google-maps-scraper/exiter"
+	"github.com/dhananjay-pareek/google-maps-scraper/exiter"
 )
 
 type PlaceJobOptions func(*PlaceJob)

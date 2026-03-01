@@ -20,7 +20,7 @@ A powerful and open-source Google Maps scraper for extracting business data at s
 Start the web interface with a single command:
 
 ```bash
-mkdir -p gmapsdata && docker run -v $PWD/gmapsdata:/gmapsdata -p 8080:8080 gosom/google-maps-scraper -data-folder /gmapsdata
+mkdir -p gmapsdata && docker run -v $PWD/gmapsdata:/gmapsdata -p 8080:8080 dhananjay-pareek/google-maps-scraper -data-folder /gmapsdata
 ```
 
 Then open http://localhost:8080 in your browser.
@@ -35,7 +35,7 @@ Then open http://localhost:8080 in your browser.
 touch results.csv && docker run \
   -v $PWD/example-queries.txt:/example-queries \
   -v $PWD/results.csv:/results.csv \
-  gosom/google-maps-scraper \
+  dhananjay-pareek/google-maps-scraper \
   -depth 1 \
   -input /example-queries \
   -results /results.csv \
@@ -59,10 +59,10 @@ Two Docker image variants are available:
 
 ```bash
 # Playwright version (default)
-docker pull gosom/google-maps-scraper
+docker pull dhananjay-pareek/google-maps-scraper
 
 # Rod version (alternative)
-docker pull gosom/google-maps-scraper:latest-rod
+docker pull dhananjay-pareek/google-maps-scraper:latest-rod
 ```
 
 ### Build from Source

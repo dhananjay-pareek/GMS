@@ -15,10 +15,10 @@ import (
 	"github.com/mattn/go-runewidth"
 	"golang.org/x/term"
 
-	"github.com/gosom/google-maps-scraper/s3uploader"
-	"github.com/gosom/google-maps-scraper/tlmt"
-	"github.com/gosom/google-maps-scraper/tlmt/gonoop"
-	"github.com/gosom/google-maps-scraper/tlmt/goposthog"
+	"github.com/dhananjay-pareek/google-maps-scraper/s3uploader"
+	"github.com/dhananjay-pareek/google-maps-scraper/tlmt"
+	"github.com/dhananjay-pareek/google-maps-scraper/tlmt/gonoop"
+	"github.com/dhananjay-pareek/google-maps-scraper/tlmt/goposthog"
 )
 
 const (
