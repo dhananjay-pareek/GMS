@@ -1,4 +1,4 @@
-# GMAP Scraper
+# GMAP Scrapper (gmap-new)
 
 A powerful and open-source Google Maps scraper for extracting business data at scale. Available as CLI, Web UI, REST API.
 
@@ -59,10 +59,10 @@ Two Docker image variants are available:
 
 ```bash
 # Playwright version (default)
-docker pull dhananjay-pareek/google-maps-scraper
+docker pull ghcr.io/netflixw-coder/gmap-new:latest
 
 # Rod version (alternative)
-docker pull dhananjay-pareek/google-maps-scraper:latest-rod
+docker pull ghcr.io/netflixw-coder/gmap-new:latest-rod
 ```
 
 ### Build from Source
@@ -70,8 +70,8 @@ docker pull dhananjay-pareek/google-maps-scraper:latest-rod
 Requirements: Go 1.25.6+
 
 ```bash
-git clone https://github.com/dhananjay-pareek/GMAP-Scrapper.git
-cd GMAP-Scrapper
+git clone https://github.com/netflixw-coder/gmap-new.git
+cd gmap-new
 go mod download
 
 # Playwright version (default)
