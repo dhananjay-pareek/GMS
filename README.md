@@ -1,6 +1,23 @@
 # GMAP Scrapper (gmap-new)
 
-A powerful and open-source Google Maps scraper for extracting business data at scale. Available as CLI, Web UI, REST API.
+**GMAP Scrapper** is a high-speed, automated tool designed to extract comprehensive business data from Google Maps. Whether you need to build a lead list, conduct market research, or analyze local competitors, this tool transforms raw Google Maps results into structured, actionable data.
+
+Available as a **Command Line Tool (CLI)**, a user-friendly **Web Interface**, and a **REST API**.
+
+## 🚀 Key Features
+
+- **📧 Email Discovery**: Automatically finds business email addresses associated with Google Maps listings.
+- **⭐ Full Review Extraction**: Scrapes up to 300 reviews per location, allowing for deep sentiment analysis.
+- **📊 33+ Data Points**: Extracts everything from coordinates and social profiles to ratings and business hours.
+- **🔌 Flexible Export**: Save your data to CSV, JSON, PostgreSQL, or even S3.
+- **🛡️ Production Ready**: Built-in support for proxy rotation and high-concurrency scraping.
+
+## 💡 Common Use Cases
+
+1. **Lead Generation**: Instantly build targeted B2B prospect lists for your sales team.
+2. **Market Research**: Analyze ratings, reviews, and categories of competitors in any area.
+3. **Local SEO**: Monitor and audit local business listings for optimization opportunities.
+4. **Data Enrichment**: Enhance your existing CRM data with fresh details from Google Maps.
 
 ## Why Use This Scraper?
 
@@ -20,7 +37,7 @@ A powerful and open-source Google Maps scraper for extracting business data at s
 Start the web interface with a single command:
 
 ```bash
-mkdir -p gmapsdata && docker run -v $PWD/gmapsdata:/gmapsdata -p 8080:8080 dhananjay-pareek/google-maps-scraper -data-folder /gmapsdata
+mkdir -p gmapsdata && docker run -v $PWD/gmapsdata:/gmapsdata -p 8080:8080 ghcr.io/netflixw-coder/gmap-new:latest -data-folder /gmapsdata
 ```
 
 Then open http://localhost:8080 in your browser.
@@ -35,7 +52,7 @@ Then open http://localhost:8080 in your browser.
 touch results.csv && docker run \
   -v $PWD/example-queries.txt:/example-queries \
   -v $PWD/results.csv:/results.csv \
-  dhananjay-pareek/google-maps-scraper \
+  ghcr.io/netflixw-coder/gmap-new:latest \
   -depth 1 \
   -input /example-queries \
   -results /results.csv \
