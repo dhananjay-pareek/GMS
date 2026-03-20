@@ -1,0 +1,29 @@
+# Git
+.git
+.github
+.gitignore
+
+# Scraped Data
+webdata/
+gmapsdata/
+*.csv
+*.db
+*.db-shm
+*.db-wal
+temp.html
+
+# Local Environment
+.env
+.venv/
+node_modules/
+vendor/
+
+# Binaries and Logs
+google-maps-scraper
+*.exe
+*.log
+bin/
+
+# OS Files
+.DS_Store
+Thumbs.db
