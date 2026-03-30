@@ -37,7 +37,7 @@ Available as a **Command Line Tool (CLI)**, a user-friendly **Web Interface**, a
 Start the web interface with a single command:
 
 ```bash
-mkdir -p gmapsdata && docker run -v $PWD/gmapsdata:/gmapsdata -p 8080:8080 ghcr.io/netflixw-coder/gmap-new:latest -data-folder /gmapsdata
+mkdir -p gmapsdata && docker run -v $PWD/gmapsdata:/gmapsdata -p 8080:8080 ghcr.io/dhananjay-pareek/gmap-scrapper:latest -data-folder /gmapsdata
 ```
 
 Then open http://localhost:8080 in your browser.
@@ -52,7 +52,7 @@ Then open http://localhost:8080 in your browser.
 touch results.csv && docker run \
   -v $PWD/example-queries.txt:/example-queries \
   -v $PWD/results.csv:/results.csv \
-  ghcr.io/netflixw-coder/gmap-new:latest \
+  ghcr.io/dhananjay-pareek/gmap-scrapper:latest \
   -depth 1 \
   -input /example-queries \
   -results /results.csv \
@@ -76,10 +76,10 @@ Two Docker image variants are available:
 
 ```bash
 # Playwright version (default)
-docker pull ghcr.io/netflixw-coder/gmap-new:latest
+docker pull ghcr.io/dhananjay-pareek/gmap-scrapper:latest
 
 # Rod version (alternative)
-docker pull ghcr.io/netflixw-coder/gmap-new:latest-rod
+docker pull ghcr.io/dhananjay-pareek/gmap-scrapper:latest-rod
 ```
 
 ### Deploy to Render (One-Click Cloud Hosting)
@@ -108,8 +108,8 @@ Features on Render:
 Requirements: Go 1.25.6+
 
 ```bash
-git clone https://github.com/netflixw-coder/gmap-new.git
-cd gmap-new
+git clone https://github.com/dhananjay-pareek/GMAP-Scrapper.git
+cd GMAP-Scrapper
 go mod download
 
 # Playwright version (default)

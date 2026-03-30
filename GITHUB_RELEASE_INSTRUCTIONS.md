@@ -89,8 +89,11 @@ git push origin main
    # Linux
    GOOS=linux GOARCH=amd64 go build -o google-maps-scraper-v1.11.0-linux-amd64
 
-   # macOS
+   # macOS Intel
    GOOS=darwin GOARCH=amd64 go build -o google-maps-scraper-v1.11.0-darwin-amd64
+   
+   # macOS Apple Silicon
+   GOOS=darwin GOARCH=arm64 go build -o google-maps-scraper-v1.11.0-darwin-arm64
    ```
    - Upload these files in the "Attach binaries" section
 
