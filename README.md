@@ -82,6 +82,27 @@ docker pull ghcr.io/netflixw-coder/gmap-new:latest
 docker pull ghcr.io/netflixw-coder/gmap-new:latest-rod
 ```
 
+### Deploy to Render (One-Click Cloud Hosting)
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy)
+
+Host your scraper in the cloud with persistent storage and scalable infrastructure.
+
+**Quick Setup:**
+1. Click the "Deploy to Render" button above
+2. Configure environment variables (PORT, DATA_FOLDER, CONCURRENCY)
+3. Wait ~5 minutes for deployment
+4. Access your web interface at the provided URL
+
+📖 **[Full Render Deployment Guide →](RENDER.md)**
+
+Features on Render:
+- ✅ Always-on service (no cold starts on paid plans)
+- ✅ Persistent disk storage for results
+- ✅ Auto-scaling and load balancing
+- ✅ Free tier available for testing
+- ✅ One-click PostgreSQL database
+
 ### Build from Source
 
 Requirements: Go 1.25.6+

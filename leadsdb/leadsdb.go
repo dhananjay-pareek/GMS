@@ -8,8 +8,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/dhananjay-pareek/go-leadsdb"
-	"github.com/dhananjay-pareek/scrapemate"
+	"github.com/dhananjay-pareek/google-maps-scraper/internal/go-leadsdb"
+	"github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate"
 
 	"github.com/dhananjay-pareek/google-maps-scraper/gmaps"
 )

@@ -1,6 +1,31 @@
 cache/
 vendor
-bin
+bin/
 webdata/
+gmapsdata/
 google-maps-scraper
 *.exe
+*.exe~
+
+# OS and Editor files
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Test and debug files
+testdata/
+*.test
+coverage.out
+coverage.html
+
+# Temporary files
+temp.html
+temp*.html
+*.tmp
+
+# Build artifacts
+dist/
+build/

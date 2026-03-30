@@ -1,11 +1,11 @@
 <tr>
-    <td>{{.ID}}</td>
-    <td>{{.Name}}</td>
-    <td>{{.Date}}</td>
-    <td>
+    <td data-label="Job ID">{{.ID}}</td>
+    <td data-label="Name">{{.Name}}</td>
+    <td data-label="Date">{{.Date}}</td>
+    <td data-label="Status">
         <span class="status-indicator status-{{.Status}}">{{.Status}}</span>
     </td>
-    <td>
+    <td data-label="Actions">
         {{ if eq .Status "ok" }}
         <span class="btn-with-info">
             <a href="/download?id={{.ID}}" download class="button download-button">Download</a>
