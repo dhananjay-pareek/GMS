@@ -10,7 +10,7 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/google/uuid"
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate"
+	"github.com/dhananjay-pareek/scrapemate"
 
 	"github.com/dhananjay-pareek/google-maps-scraper/deduper"
 	"github.com/dhananjay-pareek/google-maps-scraper/exiter"

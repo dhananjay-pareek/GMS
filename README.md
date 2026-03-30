@@ -1,23 +1,6 @@
-# GMAP Scrapper (gmap-new)
+# GMAP Scraper
 
-**GMAP Scrapper** is a high-speed, automated tool designed to extract comprehensive business data from Google Maps. Whether you need to build a lead list, conduct market research, or analyze local competitors, this tool transforms raw Google Maps results into structured, actionable data.
-
-Available as a **Command Line Tool (CLI)**, a user-friendly **Web Interface**, and a **REST API**.
-
-## 🚀 Key Features
-
-- **📧 Email Discovery**: Automatically finds business email addresses associated with Google Maps listings.
-- **⭐ Full Review Extraction**: Scrapes up to 300 reviews per location, allowing for deep sentiment analysis.
-- **📊 33+ Data Points**: Extracts everything from coordinates and social profiles to ratings and business hours.
-- **🔌 Flexible Export**: Save your data to CSV, JSON, PostgreSQL, or even S3.
-- **🛡️ Production Ready**: Built-in support for proxy rotation and high-concurrency scraping.
-
-## 💡 Common Use Cases
-
-1. **Lead Generation**: Instantly build targeted B2B prospect lists for your sales team.
-2. **Market Research**: Analyze ratings, reviews, and categories of competitors in any area.
-3. **Local SEO**: Monitor and audit local business listings for optimization opportunities.
-4. **Data Enrichment**: Enhance your existing CRM data with fresh details from Google Maps.
+A powerful and open-source Google Maps scraper for extracting business data at scale. Available as CLI, Web UI, REST API.
 
 ## Why Use This Scraper?
 
@@ -37,7 +20,7 @@ Available as a **Command Line Tool (CLI)**, a user-friendly **Web Interface**, a
 Start the web interface with a single command:
 
 ```bash
-mkdir -p gmapsdata && docker run -v $PWD/gmapsdata:/gmapsdata -p 8080:8080 ghcr.io/dhananjay-pareek/gmap-scrapper:latest -data-folder /gmapsdata
+mkdir -p gmapsdata && docker run -v $PWD/gmapsdata:/gmapsdata -p 8080:8080 dhananjay-pareek/google-maps-scraper -data-folder /gmapsdata
 ```
 
 Then open http://localhost:8080 in your browser.
@@ -52,7 +35,7 @@ Then open http://localhost:8080 in your browser.
 touch results.csv && docker run \
   -v $PWD/example-queries.txt:/example-queries \
   -v $PWD/results.csv:/results.csv \
-  ghcr.io/dhananjay-pareek/gmap-scrapper:latest \
+  dhananjay-pareek/google-maps-scraper \
   -depth 1 \
   -input /example-queries \
   -results /results.csv \
@@ -76,32 +59,11 @@ Two Docker image variants are available:
 
 ```bash
 # Playwright version (default)
-docker pull ghcr.io/dhananjay-pareek/gmap-scrapper:latest
+docker pull dhananjay-pareek/google-maps-scraper
 
 # Rod version (alternative)
-docker pull ghcr.io/dhananjay-pareek/gmap-scrapper:latest-rod
+docker pull dhananjay-pareek/google-maps-scraper:latest-rod
 ```
-
-### Deploy to Render (One-Click Cloud Hosting)
-
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy)
-
-Host your scraper in the cloud with persistent storage and scalable infrastructure.
-
-**Quick Setup:**
-1. Click the "Deploy to Render" button above
-2. Configure environment variables (PORT, DATA_FOLDER, CONCURRENCY)
-3. Wait ~5 minutes for deployment
-4. Access your web interface at the provided URL
-
-📖 **[Full Render Deployment Guide →](RENDER.md)**
-
-Features on Render:
-- ✅ Always-on service (no cold starts on paid plans)
-- ✅ Persistent disk storage for results
-- ✅ Auto-scaling and load balancing
-- ✅ Free tier available for testing
-- ✅ One-click PostgreSQL database
 
 ### Build from Source
 

@@ -18,9 +18,9 @@ import (
 	"github.com/dhananjay-pareek/google-maps-scraper/tlmt"
 	"github.com/dhananjay-pareek/google-maps-scraper/web"
 	"github.com/dhananjay-pareek/google-maps-scraper/web/sqlite"
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate"
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate/adapters/writers/csvwriter"
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate/scrapemateapp"
+	"github.com/dhananjay-pareek/scrapemate"
+	"github.com/dhananjay-pareek/scrapemate/adapters/writers/csvwriter"
+	"github.com/dhananjay-pareek/scrapemate/scrapemateapp"
 	"golang.org/x/sync/errgroup"
 )
 

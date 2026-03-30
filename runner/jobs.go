@@ -13,7 +13,7 @@ import (
 	"github.com/dhananjay-pareek/google-maps-scraper/deduper"
 	"github.com/dhananjay-pareek/google-maps-scraper/exiter"
 	"github.com/dhananjay-pareek/google-maps-scraper/gmaps"
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate"
+	"github.com/dhananjay-pareek/scrapemate"
 )
 
 func CreateSeedJobs(

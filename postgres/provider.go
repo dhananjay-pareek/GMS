@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate"
+	"github.com/dhananjay-pareek/scrapemate"
 
 	"github.com/dhananjay-pareek/google-maps-scraper/gmaps"
 )
@@ -17,7 +17,7 @@ import (
 const (
 	statusNew    = "new"
 	statusQueued = "queued"
-	batchSize    = 50
+	batchSize    = 10
 )
 
 var _ scrapemate.JobProvider = (*provider)(nil)

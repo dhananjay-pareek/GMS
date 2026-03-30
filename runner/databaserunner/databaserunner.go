@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"time"
 
 	// postgres driver
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -14,8 +13,8 @@ import (
 	"github.com/dhananjay-pareek/google-maps-scraper/postgres"
 	"github.com/dhananjay-pareek/google-maps-scraper/runner"
 	"github.com/dhananjay-pareek/google-maps-scraper/tlmt"
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate"
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate/scrapemateapp"
+	"github.com/dhananjay-pareek/scrapemate"
+	"github.com/dhananjay-pareek/scrapemate/scrapemateapp"
 )
 
 type dbrunner struct {
@@ -182,9 +181,7 @@ func openPsqlConn(dsn string) (conn *sql.DB, err error) {
 		return
 	}
 
-	conn.SetMaxOpenConns(25)
-	conn.SetMaxIdleConns(10)
-	conn.SetConnMaxLifetime(30 * time.Minute)
+	conn.SetMaxOpenConns(10)
 
 	return
 }

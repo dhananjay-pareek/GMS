@@ -14,10 +14,10 @@ import (
 	"github.com/dhananjay-pareek/google-maps-scraper/leadsdb"
 	"github.com/dhananjay-pareek/google-maps-scraper/runner"
 	"github.com/dhananjay-pareek/google-maps-scraper/tlmt"
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate"
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate/adapters/writers/csvwriter"
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate/adapters/writers/jsonwriter"
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate/scrapemateapp"
+	"github.com/dhananjay-pareek/scrapemate"
+	"github.com/dhananjay-pareek/scrapemate/adapters/writers/csvwriter"
+	"github.com/dhananjay-pareek/scrapemate/adapters/writers/jsonwriter"
+	"github.com/dhananjay-pareek/scrapemate/scrapemateapp"
 )
 
 type fileRunner struct {
@@ -190,7 +190,7 @@ func (r *fileRunner) setWriters() error {
 
 func (r *fileRunner) setApp() error {
 	opts := []func(*scrapemateapp.Config) error{
-		scrapemateapp.WithCache("leveldb", "cache"),
+		// scrapemateapp.WithCache("leveldb", "cache"),
 		scrapemateapp.WithConcurrency(r.cfg.Concurrency),
 		scrapemateapp.WithExitOnInactivity(r.cfg.ExitOnInactivityDuration),
 	}
@@ -216,6 +216,7 @@ func (r *fileRunner) setApp() error {
 
 	if !r.cfg.DisablePageReuse {
 		opts = append(opts,
+			scrapemateapp.WithPageReuseLimit(2),
 			scrapemateapp.WithPageReuseLimit(200),
 		)
 	}
