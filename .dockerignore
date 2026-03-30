@@ -16,7 +16,6 @@ temp.html
 .env
 .venv/
 node_modules/
-vendor/
 
 # Binaries and Logs
 google-maps-scraper
