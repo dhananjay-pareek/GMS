@@ -282,4 +282,8 @@ tool (
 	golang.org/x/vuln/cmd/govulncheck
 )
 
-//replace github.com/dhananjay-pareek/scrapemate v0.9.6 => ../scrapemate
+replace github.com/dhananjay-pareek/go-leadsdb => ./internal/go-leadsdb
+
+replace github.com/dhananjay-pareek/kit => ./internal/kit
+
+replace github.com/dhananjay-pareek/scrapemate => ./internal/scrapemate
