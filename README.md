@@ -1,5 +1,7 @@
 # GMAP Scraper
 
+> ✅ **Repository synced on March 30, 2026** - All files updated from source repository
+
 A powerful and open-source Google Maps scraper for extracting business data at scale. Available as CLI, Web UI, REST API.
 
 ## Why Use This Scraper?
