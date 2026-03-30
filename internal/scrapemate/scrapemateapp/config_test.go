@@ -5,9 +5,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate"
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate/mock"
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate/scrapemateapp"
+	"github.com/gosom/google-maps-scraper/internal/scrapemate"
+	"github.com/gosom/google-maps-scraper/internal/scrapemate/mock"
+	"github.com/gosom/google-maps-scraper/internal/scrapemate/scrapemateapp"
 )
 
 func Test_NewConfig(t *testing.T) {

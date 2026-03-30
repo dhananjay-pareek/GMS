@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate"
+	"github.com/gosom/google-maps-scraper/internal/scrapemate"
 )
 
 type BookDetailJob struct {

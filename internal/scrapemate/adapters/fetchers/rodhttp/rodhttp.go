@@ -10,8 +10,8 @@ import (
 	"github.com/go-rod/rod/lib/proto"
 	"github.com/go-rod/stealth"
 
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate"
-	rodadapter "github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate/adapters/browsers/rod"
+	"github.com/gosom/google-maps-scraper/internal/scrapemate"
+	rodadapter "github.com/gosom/google-maps-scraper/internal/scrapemate/adapters/browsers/rod"
 )
 
 var _ scrapemate.HTTPFetcher = (*rodFetch)(nil)

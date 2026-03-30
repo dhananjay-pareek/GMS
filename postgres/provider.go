@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dhananjay-pareek/scrapemate"
+	"github.com/gosom/scrapemate"
 
-	"github.com/dhananjay-pareek/google-maps-scraper/gmaps"
+	"github.com/gosom/google-maps-scraper/gmaps"
 )
 
 const (

@@ -8,7 +8,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dhananjay-pareek/google-maps-scraper/gmaps"
+	"github.com/gosom/google-maps-scraper/gmaps"
 )
 
 func createGoQueryFromFile(t *testing.T, path string) *goquery.Document {

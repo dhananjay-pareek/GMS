@@ -3,7 +3,7 @@ echo ==========================================
 echo   Pushing to GitHub Repository
 echo ==========================================
 echo.
-echo Repository: https://github.com/dhananjay-pareek/GMAP-Scrapper
+echo Repository: https://github.com/gosom/GMAP-Scrapper
 echo.
 
 cd /d D:\gmap-new
@@ -53,7 +53,7 @@ if %ERRORLEVEL% NEQ 0 (
     echo To fix authentication:
     echo   - GitHub CLI: gh auth login
     echo   - Personal Access Token: Store in credential manager
-    echo   - SSH Key: Use git@github.com:dhananjay-pareek/GMAP-Scrapper.git
+    echo   - SSH Key: Use git@github.com:gosom/GMAP-Scrapper.git
     echo.
     pause
     exit /b 1
@@ -65,10 +65,10 @@ echo   SUCCESS! Changes pushed to GitHub
 echo ==========================================
 echo.
 echo Your changes are now live at:
-echo https://github.com/dhananjay-pareek/GMAP-Scrapper
+echo https://github.com/gosom/GMAP-Scrapper
 echo.
 echo Next Steps:
-echo 1. Visit: https://github.com/dhananjay-pareek/GMAP-Scrapper/releases
+echo 1. Visit: https://github.com/gosom/GMAP-Scrapper/releases
 echo 2. Click "Draft a new release"
 echo 3. Tag: v1.11.0
 echo 4. Title: v1.11.0 - Render Deployment Support

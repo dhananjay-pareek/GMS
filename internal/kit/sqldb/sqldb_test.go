@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/kit/sqldb"
+	"github.com/gosom/google-maps-scraper/internal/kit/sqldb"
 
 	"github.com/stretchr/testify/require"
 )

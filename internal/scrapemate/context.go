@@ -3,7 +3,7 @@ package scrapemate
 import (
 	"context"
 
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/kit/logging"
+	"github.com/gosom/google-maps-scraper/internal/kit/logging"
 )
 
 // GetLoggerFromContext returns a logger from the context or a default logger

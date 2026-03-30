@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/kit/logging"
+	"github.com/gosom/google-maps-scraper/internal/kit/logging"
 )
 
 type Worker interface {

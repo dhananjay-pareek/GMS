@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/kit/lib"
+	"github.com/gosom/google-maps-scraper/internal/kit/lib"
 	"github.com/rs/xid"
 )
 

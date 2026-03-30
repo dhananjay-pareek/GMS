@@ -279,10 +279,10 @@ Thanks to the community for feedback on cloud deployment needs!
 
 ## 🔗 Links
 
-- **Repository**: https://github.com/dhananjay-pareek/GMAP-Scrapper
+- **Repository**: https://github.com/gosom/GMAP-Scrapper
 - **Render**: https://render.com
 - **Documentation**: See RENDER.md
-- **Issues**: https://github.com/dhananjay-pareek/GMAP-Scrapper/issues
+- **Issues**: https://github.com/gosom/GMAP-Scrapper/issues
 
 ---
 

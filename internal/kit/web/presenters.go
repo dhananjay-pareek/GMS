@@ -6,7 +6,7 @@ import (
 	"net/http"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/kit/lib"
+	"github.com/gosom/google-maps-scraper/internal/kit/lib"
 )
 
 // ErrResponse is the response body for an error.

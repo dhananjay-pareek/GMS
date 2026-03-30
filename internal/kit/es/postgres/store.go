@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/kit/es"
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/kit/es/assets"
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/kit/logging"
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/kit/sqldb"
+	"github.com/gosom/google-maps-scraper/internal/kit/es"
+	"github.com/gosom/google-maps-scraper/internal/kit/es/assets"
+	"github.com/gosom/google-maps-scraper/internal/kit/logging"
+	"github.com/gosom/google-maps-scraper/internal/kit/sqldb"
 )
 
 type aggregateVersion struct {

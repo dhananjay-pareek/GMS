@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/kit/lib"
+	"github.com/gosom/google-maps-scraper/internal/kit/lib"
 )
 
 var _ ICommand = (*CommandBase)(nil)

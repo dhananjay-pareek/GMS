@@ -5,11 +5,11 @@ import (
 	"encoding/csv"
 	"os"
 
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate"
+	"github.com/gosom/google-maps-scraper/internal/scrapemate"
 
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate/adapters/writers/csvwriter"
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate/quotestoscrapelogin/quotes"
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate/scrapemateapp"
+	"github.com/gosom/google-maps-scraper/internal/scrapemate/adapters/writers/csvwriter"
+	"github.com/gosom/google-maps-scraper/internal/scrapemate/quotestoscrapelogin/quotes"
+	"github.com/gosom/google-maps-scraper/internal/scrapemate/scrapemateapp"
 )
 
 func main() {

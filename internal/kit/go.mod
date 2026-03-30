@@ -1,3 +1,3 @@
-module github.com/dhananjay-pareek/kit
+module github.com/gosom/kit
 
 go 1.25.6

@@ -1,4 +1,4 @@
-module github.com/dhananjay-pareek/google-maps-scraper
+module github.com/gosom/google-maps-scraper
 
 go 1.25.6
 
@@ -13,8 +13,8 @@ require (
 	github.com/golangci/golangci-lint v1.64.8
 	github.com/google/open-location-code/go v0.0.0-20250415120251-fa6d7f9d4765
 	github.com/google/uuid v1.6.0
-	github.com/dhananjay-pareek/go-leadsdb v0.0.0-20251228094956-ed313efc171f
-	github.com/dhananjay-pareek/scrapemate v1.0.0
+	github.com/gosom/go-leadsdb v0.0.0-20251228094956-ed313efc171f
+	github.com/gosom/scrapemate v1.0.0
 	github.com/jackc/pgx/v5 v5.7.4
 	github.com/mattn/go-runewidth v0.0.16
 	github.com/mcnijman/go-emailaddress v1.1.1
@@ -132,7 +132,7 @@ require (
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/gopacket v1.1.19 // indirect
 	github.com/gordonklaus/ineffassign v0.1.0 // indirect
-	github.com/dhananjay-pareek/kit v0.0.0-20230309082109-543b32ac686a // indirect
+	github.com/gosom/kit v0.0.0-20230309082109-543b32ac686a // indirect
 	github.com/gostaticanalysis/analysisutil v0.7.1 // indirect
 	github.com/gostaticanalysis/comment v1.5.0 // indirect
 	github.com/gostaticanalysis/forcetypeassert v0.2.0 // indirect
@@ -281,5 +281,3 @@ tool (
 	github.com/golangci/golangci-lint/cmd/golangci-lint
 	golang.org/x/vuln/cmd/govulncheck
 )
-
-//replace github.com/dhananjay-pareek/scrapemate v0.9.6 => ../scrapemate

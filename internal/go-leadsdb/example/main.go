@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/go-leadsdb"
+	"github.com/gosom/google-maps-scraper/internal/go-leadsdb"
 )
 
 func main() {

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"io"
 
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate"
+	"github.com/gosom/google-maps-scraper/internal/scrapemate"
 )
 
 var _ scrapemate.ResultWriter = (*jsonWriter)(nil)

@@ -7,16 +7,16 @@ import (
 	"net/http/cookiejar"
 	"time"
 
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate"
+	"github.com/gosom/google-maps-scraper/internal/scrapemate"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate/adapters/cache/filecache"
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate/adapters/cache/leveldbcache"
-	fetcher "github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate/adapters/fetchers/nethttp"
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate/adapters/fetchers/stealth"
-	parser "github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate/adapters/parsers/goqueryparser"
-	memprovider "github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate/adapters/providers/memory"
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate/adapters/proxy"
+	"github.com/gosom/google-maps-scraper/internal/scrapemate/adapters/cache/filecache"
+	"github.com/gosom/google-maps-scraper/internal/scrapemate/adapters/cache/leveldbcache"
+	fetcher "github.com/gosom/google-maps-scraper/internal/scrapemate/adapters/fetchers/nethttp"
+	"github.com/gosom/google-maps-scraper/internal/scrapemate/adapters/fetchers/stealth"
+	parser "github.com/gosom/google-maps-scraper/internal/scrapemate/adapters/parsers/goqueryparser"
+	memprovider "github.com/gosom/google-maps-scraper/internal/scrapemate/adapters/providers/memory"
+	"github.com/gosom/google-maps-scraper/internal/scrapemate/adapters/proxy"
 )
 
 type ScrapemateApp struct {

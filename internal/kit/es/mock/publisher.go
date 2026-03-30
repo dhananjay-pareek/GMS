@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/kit/es"
+	"github.com/gosom/google-maps-scraper/internal/kit/es"
 )
 
 var _ es.Publisher = (*Publisher)(nil)

@@ -3,8 +3,8 @@ package rollbar_test
 import (
 	"testing"
 
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/kit/lib"
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/kit/rollbar"
+	"github.com/gosom/google-maps-scraper/internal/kit/lib"
+	"github.com/gosom/google-maps-scraper/internal/kit/rollbar"
 	"github.com/stretchr/testify/require"
 )
 

@@ -10,10 +10,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/kit/logging"
+	"github.com/gosom/google-maps-scraper/internal/kit/logging"
 
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate"
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate/mock"
+	"github.com/gosom/google-maps-scraper/internal/scrapemate"
+	"github.com/gosom/google-maps-scraper/internal/scrapemate/mock"
 )
 
 type mockedServices struct {

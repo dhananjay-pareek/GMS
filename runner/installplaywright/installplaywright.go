@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/dhananjay-pareek/google-maps-scraper/runner"
+	"github.com/gosom/google-maps-scraper/runner"
 	"github.com/playwright-community/playwright-go"
 )
 

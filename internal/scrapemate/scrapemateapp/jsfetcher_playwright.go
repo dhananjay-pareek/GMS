@@ -3,8 +3,8 @@
 package scrapemateapp
 
 import (
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate"
-	jsfetcher "github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate/adapters/fetchers/jshttp"
+	"github.com/gosom/google-maps-scraper/internal/scrapemate"
+	jsfetcher "github.com/gosom/google-maps-scraper/internal/scrapemate/adapters/fetchers/jshttp"
 )
 
 func (app *ScrapemateApp) getJSFetcher(rotator scrapemate.ProxyRotator) (scrapemate.HTTPFetcher, error) {

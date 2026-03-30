@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/kit/lib"
+	"github.com/gosom/google-maps-scraper/internal/kit/lib"
 )
 
 func TestStubErrorReporter(t *testing.T) {

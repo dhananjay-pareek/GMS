@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/kit/logging"
+	"github.com/gosom/google-maps-scraper/internal/kit/logging"
 	"golang.org/x/crypto/acme/autocert"
 )
 

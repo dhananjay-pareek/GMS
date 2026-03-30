@@ -3,7 +3,7 @@ package mock
 import (
 	"context"
 
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/kit/es"
+	"github.com/gosom/google-maps-scraper/internal/kit/es"
 )
 
 var _ es.EventStore = (*EventStore)(nil)

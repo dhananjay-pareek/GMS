@@ -3,8 +3,8 @@
 package main
 
 import (
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate"
-	rodfetcher "github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate/adapters/fetchers/rodhttp"
+	"github.com/gosom/google-maps-scraper/internal/scrapemate"
+	rodfetcher "github.com/gosom/google-maps-scraper/internal/scrapemate/adapters/fetchers/rodhttp"
 )
 
 func newJSFetcher(concurrency int, rotator scrapemate.ProxyRotator, stealth bool) (scrapemate.HTTPFetcher, error) {

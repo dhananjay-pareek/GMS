@@ -10,10 +10,10 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/google/uuid"
-	"github.com/dhananjay-pareek/scrapemate"
+	"github.com/gosom/scrapemate"
 
-	"github.com/dhananjay-pareek/google-maps-scraper/deduper"
-	"github.com/dhananjay-pareek/google-maps-scraper/exiter"
+	"github.com/gosom/google-maps-scraper/deduper"
+	"github.com/gosom/google-maps-scraper/exiter"
 )
 
 type GmapJobOptions func(*GmapJob)

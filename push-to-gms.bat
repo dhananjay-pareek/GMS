@@ -4,10 +4,10 @@ echo.
 
 REM Add the new remote
 echo Adding remote origin...
-git remote add origin https://github.com/dhananjay-pareek/GMS.git
+git remote add origin https://github.com/gosom/GMS.git
 if errorlevel 1 (
     echo Remote might already exist, trying to set URL instead...
-    git remote set-url origin https://github.com/dhananjay-pareek/GMS.git
+    git remote set-url origin https://github.com/gosom/GMS.git
 )
 
 REM Rename branch to main

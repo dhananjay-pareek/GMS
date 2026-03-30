@@ -12,13 +12,13 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate"
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate/adapters/cache/filecache"
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate/adapters/cache/leveldbcache"
-	fetcher "github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate/adapters/fetchers/nethttp"
-	parser "github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate/adapters/parsers/goqueryparser"
-	provider "github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate/adapters/providers/memory"
-	proxyrotator "github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate/adapters/proxy"
+	"github.com/gosom/google-maps-scraper/internal/scrapemate"
+	"github.com/gosom/google-maps-scraper/internal/scrapemate/adapters/cache/filecache"
+	"github.com/gosom/google-maps-scraper/internal/scrapemate/adapters/cache/leveldbcache"
+	fetcher "github.com/gosom/google-maps-scraper/internal/scrapemate/adapters/fetchers/nethttp"
+	parser "github.com/gosom/google-maps-scraper/internal/scrapemate/adapters/parsers/goqueryparser"
+	provider "github.com/gosom/google-maps-scraper/internal/scrapemate/adapters/providers/memory"
+	proxyrotator "github.com/gosom/google-maps-scraper/internal/scrapemate/adapters/proxy"
 
 	"booktoscrapesimple/bookstoscrape"
 )

@@ -9,12 +9,12 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/dhananjay-pareek/google-maps-scraper/runner"
-	"github.com/dhananjay-pareek/google-maps-scraper/runner/databaserunner"
-	"github.com/dhananjay-pareek/google-maps-scraper/runner/filerunner"
-	"github.com/dhananjay-pareek/google-maps-scraper/runner/installplaywright"
-	"github.com/dhananjay-pareek/google-maps-scraper/runner/lambdaaws"
-	"github.com/dhananjay-pareek/google-maps-scraper/runner/webrunner"
+	"github.com/gosom/google-maps-scraper/runner"
+	"github.com/gosom/google-maps-scraper/runner/databaserunner"
+	"github.com/gosom/google-maps-scraper/runner/filerunner"
+	"github.com/gosom/google-maps-scraper/runner/installplaywright"
+	"github.com/gosom/google-maps-scraper/runner/lambdaaws"
+	"github.com/gosom/google-maps-scraper/runner/webrunner"
 )
 
 func main() {

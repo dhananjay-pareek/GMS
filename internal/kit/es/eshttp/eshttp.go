@@ -8,9 +8,9 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/kit/es"
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/kit/lib"
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/kit/web"
+	"github.com/gosom/google-maps-scraper/internal/kit/es"
+	"github.com/gosom/google-maps-scraper/internal/kit/lib"
+	"github.com/gosom/google-maps-scraper/internal/kit/web"
 )
 
 func RegisterDomainRoutes(domain string, mux web.Router, store es.EventStore, registry *es.Registry, aggFactory es.AggregateFactory) {

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/kit/logging"
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/kit/web"
+	"github.com/gosom/google-maps-scraper/internal/kit/logging"
+	"github.com/gosom/google-maps-scraper/internal/kit/web"
 	"github.com/stretchr/testify/require"
 )
 

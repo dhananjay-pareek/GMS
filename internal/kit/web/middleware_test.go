@@ -12,9 +12,9 @@ import (
 	"github.com/rs/cors"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/kit/lib"
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/kit/logging"
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/kit/web"
+	"github.com/gosom/google-maps-scraper/internal/kit/lib"
+	"github.com/gosom/google-maps-scraper/internal/kit/logging"
+	"github.com/gosom/google-maps-scraper/internal/kit/web"
 )
 
 func TestNewCorsMiddleware(t *testing.T) {

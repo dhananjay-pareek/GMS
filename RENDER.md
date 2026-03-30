@@ -257,7 +257,7 @@ Upgrade plan:
 ## 🆘 Support
 
 - **Render Support:** [https://render.com/support](https://render.com/support)
-- **GitHub Issues:** [Create an issue](https://github.com/dhananjay-pareek/google-maps-scraper/issues)
+- **GitHub Issues:** [Create an issue](https://github.com/gosom/google-maps-scraper/issues)
 - **Community:** [Render Community](https://community.render.com)
 
 ---

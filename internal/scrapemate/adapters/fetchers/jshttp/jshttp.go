@@ -7,8 +7,8 @@ import (
 
 	"github.com/playwright-community/playwright-go"
 
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate"
-	playwrightadapter "github.com/dhananjay-pareek/google-maps-scraper/internal/scrapemate/adapters/browsers/playwright"
+	"github.com/gosom/google-maps-scraper/internal/scrapemate"
+	playwrightadapter "github.com/gosom/google-maps-scraper/internal/scrapemate/adapters/browsers/playwright"
 )
 
 var _ scrapemate.HTTPFetcher = (*jsFetch)(nil)

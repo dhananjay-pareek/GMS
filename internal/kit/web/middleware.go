@@ -8,8 +8,8 @@ import (
 	"runtime/debug"
 	"time"
 
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/kit/lib"
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/kit/logging"
+	"github.com/gosom/google-maps-scraper/internal/kit/lib"
+	"github.com/gosom/google-maps-scraper/internal/kit/logging"
 	"github.com/realclientip/realclientip-go"
 	"github.com/rs/cors"
 )

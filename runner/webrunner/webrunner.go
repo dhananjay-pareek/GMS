@@ -7,20 +7,23 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
-	"github.com/dhananjay-pareek/google-maps-scraper/deduper"
-	"github.com/dhananjay-pareek/google-maps-scraper/exiter"
-	"github.com/dhananjay-pareek/google-maps-scraper/runner"
-	"github.com/dhananjay-pareek/google-maps-scraper/tlmt"
-	"github.com/dhananjay-pareek/google-maps-scraper/web"
-	"github.com/dhananjay-pareek/google-maps-scraper/web/sqlite"
-	"github.com/dhananjay-pareek/scrapemate"
-	"github.com/dhananjay-pareek/scrapemate/adapters/writers/csvwriter"
-	"github.com/dhananjay-pareek/scrapemate/scrapemateapp"
+	"github.com/gosom/google-maps-scraper/deduper"
+	"github.com/gosom/google-maps-scraper/exiter"
+	"github.com/gosom/google-maps-scraper/runner"
+	"github.com/gosom/google-maps-scraper/tlmt"
+	"github.com/gosom/google-maps-scraper/web"
+	"github.com/gosom/google-maps-scraper/web/sqlite"
+	"github.com/gosom/scrapemate"
+	"github.com/gosom/scrapemate/adapters/writers/csvwriter"
+	"github.com/gosom/scrapemate/scrapemateapp"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -75,7 +78,88 @@ func (w *webrunner) Run(ctx context.Context) error {
 		return w.srv.Start(ctx)
 	})
 
+	// Auto-open browser after server is ready
+	go func() {
+		url := "http://localhost" + w.cfg.Addr
+		// Wait for server to be ready
+		for i := 0; i < 30; i++ {
+			time.Sleep(100 * time.Millisecond)
+			resp, err := http.Get(url + "/health")
+			if err == nil {
+				resp.Body.Close()
+				break
+			}
+		}
+		openBrowser(url)
+	}()
+
 	return egroup.Wait()
+}
+
+// openBrowser opens the specified URL in app mode window
+func openBrowser(url string) {
+	var cmd *exec.Cmd
+
+	switch runtime.GOOS {
+	case "windows":
+		edgePath := findEdgePath()
+		if edgePath != "" {
+			cmd = exec.Command(edgePath, "--app="+url, "--window-size=1200,800")
+		} else {
+			cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+		}
+	case "darwin":
+		chromePath := "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+		if _, err := os.Stat(chromePath); err == nil {
+			cmd = exec.Command(chromePath, "--app="+url, "--window-size=1200,800")
+		} else {
+			cmd = exec.Command("open", url)
+		}
+	default:
+		for _, browser := range []string{"google-chrome", "chromium-browser", "chromium"} {
+			if path, err := exec.LookPath(browser); err == nil {
+				cmd = exec.Command(path, "--app="+url, "--window-size=1200,800")
+				break
+			}
+		}
+		if cmd == nil {
+			cmd = exec.Command("xdg-open", url)
+		}
+	}
+
+	if err := cmd.Start(); err != nil {
+		log.Printf("Failed to open browser: %v", err)
+	}
+}
+
+// findEdgePath finds Microsoft Edge executable on Windows
+func findEdgePath() string {
+	paths := []string{
+		filepath.Join(os.Getenv("ProgramFiles(x86)"), "Microsoft", "Edge", "Application", "msedge.exe"),
+		filepath.Join(os.Getenv("ProgramFiles"), "Microsoft", "Edge", "Application", "msedge.exe"),
+		filepath.Join(os.Getenv("LocalAppData"), "Microsoft", "Edge", "Application", "msedge.exe"),
+	}
+
+	for _, p := range paths {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+
+	// Try Chrome as fallback
+	chromePaths := []string{
+		filepath.Join(os.Getenv("ProgramFiles"), "Google", "Chrome", "Application", "chrome.exe"),
+		filepath.Join(os.Getenv("ProgramFiles(x86)"), "Google", "Chrome", "Application", "chrome.exe"),
+		filepath.Join(os.Getenv("LocalAppData"), "Google", "Chrome", "Application", "chrome.exe"),
+	}
+
+	for _, p := range chromePaths {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+
+	return ""
 }
 
 func (w *webrunner) Close(context.Context) error {

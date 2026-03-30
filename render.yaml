@@ -3,7 +3,7 @@ services:
   - type: web
     name: google-maps-scraper
     runtime: docker
-    repo: https://github.com/dhananjay-pareek/GMAP-Scrapper
+    repo: https://github.com/gosom/GMAP-Scrapper
     branch: main
     dockerfilePath: ./Dockerfile
     

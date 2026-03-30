@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/kit/logging"
+	"github.com/gosom/google-maps-scraper/internal/kit/logging"
 )
 
 // New creates a new scrapemate

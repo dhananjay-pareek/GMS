@@ -6,7 +6,7 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dhananjay-pareek/google-maps-scraper/internal/kit/lib"
+	"github.com/gosom/google-maps-scraper/internal/kit/lib"
 )
 
 func TestValidator(t *testing.T) {

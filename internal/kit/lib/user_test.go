@@ -1,6 +1,6 @@
 package lib_test
 
-import "github.com/dhananjay-pareek/google-maps-scraper/internal/kit/lib"
+import "github.com/gosom/google-maps-scraper/internal/kit/lib"
 
 var _ lib.User = &User{}
 
