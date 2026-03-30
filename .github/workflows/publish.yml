@@ -29,7 +29,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/netflixw-coder/gmap-new
+          images: ghcr.io/dhananjay-pareek/gmap-scrapper
       
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
@@ -59,7 +59,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/netflixw-coder/gmap-new
+          images: ghcr.io/dhananjay-pareek/gmap-scrapper
           flavor: |
             suffix=-rod,onlatest=true
       
