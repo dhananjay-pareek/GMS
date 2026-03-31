@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Minimalist Scraper Dashboard V3</title>
+<style>
+        /* Typography & Base Reset */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+        :root {
+            --bg-color: #f3f6f9;
+            --card-bg: #ffffff;
+            --text-main: #1f2937;
+            --text-muted: #6b7280;
+            --text-light: #9ca3af;
+            --border-color: #e2e8f0;
+            --purple-start: #8e63f1;
+            --purple-end: #a158f3;
+            --sky-bg: #f0f9ff;
+            --sky-text: #0284c7;
+            --red-bg: #fef2f2;
+            --red-text: #ef4444;
+            --green-bg: #f0fdf4;
+            --green-text: #15803d;
+            --shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.04), 0 4px 12px -4px rgba(0, 0, 0, 0.03);
+            --radius-lg: 1rem;
+            --radius-md: 0.75rem;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            line-height: 1.5;
+            padding: 2rem;
+        }
+
+        /* Layout */
+        .dashboard-container {
+            max-width: 1440px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+            align-items: start;
+        }
+
+        @media (min-width: 1024px) {
+            .dashboard-container {
+                grid-template-columns: 400px 1fr;
+            }
+        }
+
+        /* Cards */
+        .card {
+            background: var(--card-bg);
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
+            box-shadow: var(--shadow);
+            border: 1px solid rgba(226, 232, 240, 0.5);
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #111827;
+            margin-bottom: 1.5rem;
+        }
+
+        /* Accordion / Nested Cards */
+        .config-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .accordion-item {
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+        }
+
+        .accordion-header {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            background: #fafbfc;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            color: var(--text-main);
+            text-align: left;
+            transition: background 0.2s;
+        }
+
+        .accordion-header:hover {
+            background: #f1f5f9;
+        }
+
+        .accordion-header.active {
+            background: #f8fafc;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .accordion-content {
+            padding: 1.25rem;
+            background: white;
+        }
+
+        .accordion-icon {
+            width: 1.25rem;
+            height: 1.25rem;
+            color: var(--text-light);
+            transition: transform 0.2s;
+        }
+
+        /* Form Elements */
+        .form-group {
+            margin-bottom: 1.25rem;
+        }
+
+        .form-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .label-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            margin-bottom: 0.375rem;
+        }
+
+        label {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+
+        .required {
+            color: var(--red-text);
+        }
+
+        .help-icon {
+            width: 1rem;
+            height: 1rem;
+            color: var(--text-light);
+            cursor: help;
+        }
+
+        input, textarea {
+            width: 100%;
+            padding: 0.625rem 1rem;
+            border-radius: 0.5rem;
+            border: 1px solid var(--border-color);
+            font-size: 0.9375rem;
+            color: var(--text-main);
+            font-family: inherit;
+            transition: border-color 0.2s, ring 0.2s;
+        }
+
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: var(--purple-start);
+            box-shadow: 0 0 0 3px rgba(142, 99, 241, 0.1);
+        }
+
+        textarea {
+            resize: none;
+        }
+
+        /* Buttons */
+        .btn-primary {
+            width: 100%;
+            margin-top: 2rem;
+            padding: 1rem;
+            border: none;
+            border-radius: var(--radius-md);
+            background: linear-gradient(to right, var(--purple-start), var(--purple-end));
+            color: white;
+            font-size: 1.125rem;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            box-shadow: 0 4px 14px 0 rgba(142, 99, 241, 0.39);
+            transition: transform 0.2s, opacity 0.2s;
+        }
+
+        .btn-primary:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .btn-sm {
+            padding: 0.5rem 1rem;
+            font-size: 0.75rem;
+            font-weight: 700;
+            border-radius: 0.5rem;
+            border: none;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn-sky {
+            background-color: var(--sky-bg);
+            color: var(--sky-text);
+        }
+
+        .btn-sky:hover {
+            background-color: #e0f2fe;
+        }
+
+        .btn-red {
+            background-color: var(--red-bg);
+            color: var(--red-text);
+        }
+
+        .btn-red:hover {
+            background-color: #fee2e2;
+        }
+
+        /* Table */
+        .table-responsive {
+            width: 100%;
+            overflow-x: auto;
+            border: 1px solid #f1f5f9;
+            border-radius: var(--radius-md);
+        }
+
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+        .results-table thead tr {
+            background-color: #eff6ff;
+        }
+
+        .results-table th {
+            padding: 1rem;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            font-weight: 700;
+        }
+
+        .results-table td {
+            padding: 1.5rem 1rem;
+            font-size: 0.875rem;
+            border-bottom: 1px solid #f8fafc;
+        }
+
+        .results-table tbody tr:hover {
+            background-color: #fafbfc;
+        }
+
+        .text-mono {
+            font-family: ui-monospace, monospace;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.375rem;
+            padding: 0.375rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            background-color: var(--green-bg);
+            color: var(--green-text);
+        }
+
+        .actions-cell {
+            display: flex;
+            gap: 0.5rem;
+            justify-content: center;
+        }
+
+        /* SVG Sizing */
+        .icon-sm {
+            width: 0.875rem;
+            height: 0.875rem;
+        }
+    </style>
+</head>
+<body>
+<main class="dashboard-container">
+<!-- Configuration Section -->
+<section class="card config-panel" data-purpose="configuration-panel">
+<h1 class="section-title">Configuration</h1>
+<div class="config-stack">
+<!-- Job Details (Open) -->
+<div class="accordion-item" data-purpose="job-details-card">
+<button class="accordion-header active">
+<span>Job Details</span>
+<svg class="accordion-icon" fill="currentColor" viewbox="0 0 20 20"><path clip-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" fill-rule="evenodd"></path></svg>
+</button>
+<div class="accordion-content">
+<div class="form-group">
+<div class="label-wrapper">
+<label>Job Name</label>
+<svg class="help-icon" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+</div>
+<input placeholder="e.g., Restaurants NYC" type="text"/>
+</div>
+<div class="form-group">
+<div class="label-wrapper">
+<label>Keywords <span class="required">*</span></label>
+<svg class="help-icon" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+</div>
+<textarea placeholder="restaurants in New York
+coffee shops in Manhattan
+(one search per line)" rows="5"></textarea>
+</div>
+<div class="form-group">
+<div class="label-wrapper">
+<label>Language <span class="required">*</span></label>
+<svg class="help-icon" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+</div>
+<input type="text" value="en"/>
+</div>
+</div>
+</div>
+<!-- Other Sections (Collapsed) -->
+<div class="accordion-item">
+<button class="accordion-header">
+<span>Location Settings</span>
+<svg class="accordion-icon" fill="currentColor" style="transform: rotate(-90deg)" viewbox="0 0 20 20"><path clip-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" fill-rule="evenodd"></path></svg>
+</button>
+</div>
+<div class="accordion-item">
+<button class="accordion-header">
+<span>Advanced Options</span>
+<svg class="accordion-icon" fill="currentColor" style="transform: rotate(-90deg)" viewbox="0 0 20 20"><path clip-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" fill-rule="evenodd"></path></svg>
+</button>
+</div>
+<div class="accordion-item">
+<button class="accordion-header">
+<span>Proxies</span>
+<svg class="accordion-icon" fill="currentColor" style="transform: rotate(-90deg)" viewbox="0 0 20 20"><path clip-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" fill-rule="evenodd"></path></svg>
+</button>
+</div>
+</div>
+<button class="btn-primary" id="start-scraping-btn">
+<span>🚀</span> Start Scraping
+        </button>
+</section>
+<!-- Results Section -->
+<section class="card results-panel" data-purpose="results-panel">
+<h2 class="section-title">Scraping Results</h2>
+<div class="table-responsive">
+<table class="results-table" id="results-table">
+<thead>
+<tr>
+<th style="padding-left: 1.5rem;">Job ID</th>
+<th>Job Name</th>
+<th>Job Date</th>
+<th>Status</th>
+<th style="text-align: center; padding-right: 1.5rem;">Actions</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="text-mono" style="padding-left: 1.5rem;">
+                            eac3bd94-886d-4753-8e12-fb55a9c9764f
+                        </td>
+<td style="font-weight: 500;">stress test</td>
+<td style="color: var(--text-muted);">2026-03-30 17:56:00 +0000 UTC</td>
+<td>
+<span class="status-badge">
+<svg class="icon-sm" fill="currentColor" viewbox="0 0 20 20"><path clip-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" fill-rule="evenodd"></path></svg>
+                                Ok
+                            </span>
+</td>
+<td style="padding-right: 1.5rem;">
+<div class="actions-cell">
+<button class="btn-sm btn-sky">Download</button>
+<button class="btn-sm btn-red">Delete</button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</main>
+<script>
+    document.getElementById('start-scraping-btn').addEventListener('click', function() {
+        const btn = this;
+        const originalContent = btn.innerHTML;
+        btn.innerHTML = 'Scraping...';
+        btn.disabled = true;
+        btn.style.opacity = '0.7';
+        
+        setTimeout(() => {
+            btn.innerHTML = originalContent;
+            btn.disabled = false;
+            btn.style.opacity = '1';
+            alert('Scraping job started successfully!');
+        }, 1500);
+    });
+</script>
+</body></html>

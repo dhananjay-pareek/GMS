@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Minimalist Scraper Dashboard V3</title>
+<!-- Tailwind CSS V3 CDN with plugins -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Custom Tailwind Configuration -->
+<script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'scraping-purple-start': '#8e63f1',
+            'scraping-purple-end': '#a158f3',
+            'brand-gray-light': '#f8fafc',
+            'brand-border': '#e2e8f0',
+          },
+          boxShadow: {
+            'soft': '0 4px 20px rgba(0, 0, 0, 0.05)',
+          }
+        }
+      }
+    }
+  </script>
+<style data-purpose="custom-typography">
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #f3f6f9;
+    }
+  </style>
+<style data-purpose="component-styling">
+    .card-shadow {
+      box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.04), 0 4px 12px -4px rgba(0, 0, 0, 0.03);
+    }
+    /* Simple custom scrollbar for the keywords textarea */
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background-color: #e2e8f0;
+      border-radius: 10px;
+    }
+  </style>
+</head>
+<body class="p-4 md:p-8 lg:p-12">
+<main class="max-w-[1440px] mx-auto">
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+<!-- BEGIN: Configuration Section -->
+<section class="lg:col-span-4 bg-white rounded-2xl p-6 card-shadow border border-gray-100" data-purpose="configuration-panel">
+<h1 class="text-2xl font-bold text-gray-800 mb-6">Configuration</h1>
+<div class="space-y-4">
+<!-- Job Details (Expanded) -->
+<div class="border border-gray-200 rounded-xl overflow-hidden" data-purpose="job-details-card">
+<button class="w-full flex items-center justify-between p-4 bg-gray-50/50 text-left font-semibold text-gray-700">
+<span>Job Details</span>
+<svg class="h-5 w-5 text-gray-400" fill="currentColor" viewbox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+<path clip-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" fill-rule="evenodd"></path>
+</svg>
+</button>
+<div class="p-5 space-y-5 bg-white">
+<!-- Job Name -->
+<div data-purpose="form-group">
+<label class="block text-sm font-semibold text-gray-600 mb-1.5 flex items-center">
+                  Job Name
+                  <span class="ml-1 text-gray-400 cursor-help" title="Descriptive name for your task">
+<svg class="h-4 w-4" fill="none" stroke="currentColor" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+</span>
+</label>
+<input class="w-full px-4 py-2.5 rounded-lg border-gray-200 focus:ring-purple-500 focus:border-purple-500 text-gray-700" placeholder="e.g., Restaurants NYC" type="text"/>
+</div>
+<!-- Keywords -->
+<div data-purpose="form-group">
+<label class="block text-sm font-semibold text-gray-600 mb-1.5 flex items-center">
+                  Keywords <span class="text-red-400 ml-0.5">*</span>
+<span class="ml-1 text-gray-400 cursor-help" title="Enter search queries, one per line">
+<svg class="h-4 w-4" fill="none" stroke="currentColor" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+</span>
+</label>
+<textarea class="w-full px-4 py-2.5 rounded-lg border-gray-200 focus:ring-purple-500 focus:border-purple-500 text-gray-700 custom-scrollbar resize-none" placeholder="restaurants in New York
+coffee shops in Manhattan
+(one search per line)" rows="5"></textarea>
+</div>
+<!-- Language -->
+<div data-purpose="form-group">
+<label class="block text-sm font-semibold text-gray-600 mb-1.5 flex items-center">
+                  Language <span class="text-red-400 ml-0.5">*</span>
+<span class="ml-1 text-gray-400 cursor-help" title="Target language for scraping">
+<svg class="h-4 w-4" fill="none" stroke="currentColor" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+</span>
+</label>
+<input class="w-full px-4 py-2.5 rounded-lg border-gray-200 focus:ring-purple-500 focus:border-purple-500 text-gray-700" type="text" value="en"/>
+</div>
+</div>
+</div>
+<!-- Location Settings (Collapsed) -->
+<div class="border border-gray-200 rounded-xl overflow-hidden" data-purpose="location-settings-card">
+<button class="w-full flex items-center justify-between p-4 bg-white text-left font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
+<span>Location Settings</span>
+<svg class="h-5 w-5 text-gray-400" fill="currentColor" viewbox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+<path clip-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" fill-rule="evenodd"></path>
+</svg>
+</button>
+</div>
+<!-- Advanced Options (Collapsed) -->
+<div class="border border-gray-200 rounded-xl overflow-hidden" data-purpose="advanced-options-card">
+<button class="w-full flex items-center justify-between p-4 bg-white text-left font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
+<span>Advanced Options</span>
+<svg class="h-5 w-5 text-gray-400" fill="currentColor" viewbox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+<path clip-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" fill-rule="evenodd"></path>
+</svg>
+</button>
+</div>
+<!-- Proxies (Collapsed) -->
+<div class="border border-gray-200 rounded-xl overflow-hidden" data-purpose="proxies-card">
+<button class="w-full flex items-center justify-between p-4 bg-white text-left font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
+<span>Proxies</span>
+<svg class="h-5 w-5 text-gray-400" fill="currentColor" viewbox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+<path clip-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" fill-rule="evenodd"></path>
+</svg>
+</button>
+</div>
+</div>
+<!-- Action Button -->
+<button class="w-full mt-8 py-4 px-6 rounded-xl bg-gradient-to-r from-scraping-purple-start to-scraping-purple-end text-white font-bold text-lg shadow-lg hover:opacity-90 transition-all flex items-center justify-center gap-2 group" id="start-scraping-btn">
+<span class="group-hover:scale-110 transition-transform">🚀</span>
+          Start Scraping
+        </button>
+</section>
+<!-- END: Configuration Section -->
+<!-- BEGIN: Scraping Results Section -->
+<section class="lg:col-span-8 bg-white rounded-2xl p-6 card-shadow border border-gray-100" data-purpose="results-panel">
+<h2 class="text-2xl font-bold text-gray-800 mb-6">Scraping Results</h2>
+<div class="overflow-x-auto rounded-xl border border-gray-100">
+<table class="w-full text-left border-collapse" id="results-table">
+<thead>
+<tr class="bg-blue-50 text-[11px] uppercase tracking-widest text-gray-500 font-bold">
+<th class="px-4 py-4 first:pl-6">Job ID</th>
+<th class="px-4 py-4">Job Name</th>
+<th class="px-4 py-4">Job Date</th>
+<th class="px-4 py-4">Status</th>
+<th class="px-4 py-4 last:pr-6 text-center">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-gray-50">
+<tr class="hover:bg-gray-50/50 transition-colors">
+<td class="px-4 py-6 first:pl-6 text-xs text-gray-500 font-mono">
+                  eac3bd94-886d-4753-8e12-fb55a9c9764f
+                </td>
+<td class="px-4 py-6 text-sm text-gray-700 font-medium">
+                  stress test
+                </td>
+<td class="px-4 py-6 text-sm text-gray-500">
+                  2026-03-30 17:56:00 +0000 UTC
+                </td>
+<td class="px-4 py-6">
+<span class="inline-flex items-center gap-1.5 py-1.5 px-3 rounded-full bg-green-100 text-green-700 text-[11px] font-bold">
+<svg class="h-3.5 w-3.5" fill="currentColor" viewbox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+<path clip-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" fill-rule="evenodd"></path>
+</svg>
+                    Ok
+                  </span>
+</td>
+<td class="px-4 py-6 last:pr-6">
+<div class="flex items-center justify-center gap-2">
+<button class="px-4 py-2 text-xs font-bold text-sky-600 bg-sky-50 rounded-lg hover:bg-sky-100 transition-colors">
+                      Download
+                    </button>
+<button class="px-4 py-2 text-xs font-bold text-red-500 bg-red-50 rounded-lg hover:bg-red-100 transition-colors">
+                      Delete
+                    </button>
+</div>
+</td>
+</tr>
+<!-- Empty row state placeholder could go here -->
+</tbody>
+</table>
+</div>
+</section>
+<!-- END: Scraping Results Section -->
+</div>
+</main>
+<script data-purpose="interaction-handlers">
+    // Simple script to handle button clicks for demonstration
+    document.getElementById('start-scraping-btn').addEventListener('click', function() {
+      const btn = this;
+      const originalText = btn.innerHTML;
+      btn.innerHTML = 'Scraping...';
+      btn.disabled = true;
+      btn.style.opacity = '0.7';
+      
+      setTimeout(() => {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        alert('Scraping job started successfully!');
+      }, 1500);
+    });
+  </script>
+</body></html>

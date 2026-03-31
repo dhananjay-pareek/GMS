@@ -1,20 +1,29 @@
 {{range .}}
 <tr>
-    <td data-label="Job ID">{{.ID}}</td>
-    <td data-label="Name">{{.Name}}</td>
-    <td data-label="Date">{{.Date}}</td>
-    <td data-label="Status">
-        <span class="status-indicator status-{{.Status}}">{{.Status}}</span>
+    <td class="text-mono" style="padding-left: 1.5rem;">{{.ID}}</td>
+    <td style="font-weight: 500;">{{.Name}}</td>
+    <td style="color: var(--text-muted);">{{.Date}}</td>
+    <td>
+        <span class="status-badge status-{{.Status}}">
+            {{if eq .Status "ok"}}
+            <svg class="icon-sm" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd"
+                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                    clip-rule="evenodd"></path>
+            </svg>
+            {{end}}
+            {{.Status}}
+        </span>
     </td>
-    <td data-label="Actions">
-        {{ if eq .Status "ok" }}
-            <a href="/download?id={{.ID}}" download class="button download-button">Download</a>
-        {{ end }}
-        <button hx-delete="/delete?id={{.ID}}"
-                hx-target="closest tr"
-                hx-swap="outerHTML"
-                hx-confirm="Are you sure you want to delete this job?"
-                class="delete-button">Delete</button>
+    <td style="padding-right: 1.5rem;">
+        <div class="actions-cell">
+            {{if eq .Status "ok"}}
+            <a href="/download?id={{.ID}}" download class="btn-sm btn-sky"
+                style="text-decoration: none; display: inline-flex; align-items: center;">Download</a>
+            {{end}}
+            <button hx-delete="/delete?id={{.ID}}" hx-target="closest tr" hx-swap="outerHTML"
+                hx-confirm="Are you sure you want to delete this job?" class="btn-sm btn-red">Delete</button>
+        </div>
     </td>
 </tr>
 {{end}}

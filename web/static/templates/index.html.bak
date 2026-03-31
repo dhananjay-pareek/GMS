@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GMAP Scraper</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/main.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/htmx/1.9.6/htmx.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Main Content - Side by Side -->
+        <main>
+            <!-- Left Panel - Form -->
+            <div class="form-panel">
+                <h3 class="panel-title">Configuration</h3>
+                <div id="error-container" class="error-message"></div>
+
+                <form hx-post="/scrape" hx-target="#job-table tbody" hx-swap="beforeend" hx-indicator="#spinner"
+                    hx-on::before-request="document.getElementById('error-container').innerHTML = ''"
+                    hx-on::after-request="if(!event.detail.successful) document.getElementById('error-container').innerHTML = event.detail.xhr.responseText">
+
+                    <!-- Job Details Section -->
+                    <details class="form-section" open>
+                        <summary class="form-section-header">Job Details</summary>
+                        <div class="form-section-body">
+                            <div class="form-group">
+                                <div class="form-label">
+                                    <label for="name">Job Name</label>
+                                    <span class="info-tip" data-tip="Give this job a name so you can find it later in the table. Example: 'Restaurants NYC'">?</span>
+                                </div>
+                                <input type="text" id="name" name="name" value="{{.Name}}" placeholder="e.g., Restaurants NYC">
+                            </div>
+
+                            <div class="form-group">
+                                <div class="form-label">
+                                    <label for="keywords">Keywords <span class="required-indicator">*</span></label>
+                                    <span class="info-tip" data-tip="Type what you'd search on Google Maps, one per line. Example:&#10;restaurants in Mumbai&#10;dentists in London&#10;Each line becomes a separate scrape.">?</span>
+                                </div>
+                                <textarea id="keywords" name="keywords" rows="6" placeholder="restaurants in New York&#10;coffee shops in Manhattan&#10;(one search per line)">{{ .KeywordsString }}</textarea>
+                                <span class="validation-error" id="keywords-error"></span>
+                            </div>
+
+                            <div class="form-group">
+                                <div class="form-label">
+                                    <label for="lang">Language <span class="required-indicator">*</span></label>
+                                    <span class="info-tip" data-tip="Sets the language Google Maps uses for results. Use 'en' for English, 'fr' for French, 'de' for German, 'hi' for Hindi, etc. Affects business names &amp; categories.">?</span>
+                                </div>
+                                <input type="text" id="lang" name="lang" value="{{.Language}}" placeholder="en" maxlength="2">
+                                <span class="validation-error" id="lang-error"></span>
+                            </div>
+                        </div>
+                    </details>
+
+                    <!-- Location Settings Section -->
+                    <details class="form-section" id="location-section">
+                        <summary class="form-section-header">Location Settings</summary>
+                        <div class="form-section-body">
+                            <div class="form-group">
+                                <div class="form-label">
+                                    <label>Select Location</label>
+                                    <span class="info-tip" data-tip="Click anywhere on the map to set coordinates. You can also drag the marker to adjust. The circle shows your search radius.">?</span>
+                                </div>
+                                <div id="map-container">
+                                    <div id="location-map"></div>
+                                    <div class="map-controls">
+                                        <button type="button" id="locate-me-btn" class="btn-secondary" title="Use my location">
+                                            <span class="locate-icon">📍</span> My Location
+                                        </button>
+                                        <button type="button" id="clear-location-btn" class="btn-secondary" title="Clear selection">
+                                            Clear
+                                        </button>
+                                    </div>
+                                </div>
+                                <p class="help-text">Click on the map or enter coordinates manually below</p>
+                            </div>
+
+                            <div class="coord-grid">
+                                <div class="form-group">
+                                    <div class="form-label">
+                                        <label for="latitude">Latitude <span class="required-indicator" id="lat-required" style="display:none">*</span></label>
+                                        <span class="info-tip" data-tip="Latitude ranges from -90 (South Pole) to 90 (North Pole). Example: 28.6139 for New Delhi.">?</span>
+                                    </div>
+                                    <input type="number" step="0.000001" id="latitude" name="latitude" value="{{.Lat}}" min="-90" max="90" placeholder="e.g., 28.6139">
+                                    <span class="validation-error" id="latitude-error"></span>
+                                </div>
+                                <div class="form-group">
+                                    <div class="form-label">
+                                        <label for="longitude">Longitude <span class="required-indicator" id="lon-required" style="display:none">*</span></label>
+                                        <span class="info-tip" data-tip="Longitude ranges from -180 (West) to 180 (East). Example: 77.2090 for New Delhi.">?</span>
+                                    </div>
+                                    <input type="number" step="0.000001" id="longitude" name="longitude" value="{{.Lon}}" min="-180" max="180" placeholder="e.g., 77.2090">
+                                    <span class="validation-error" id="longitude-error"></span>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <div class="form-label">
+                                    <label for="zoom">Zoom Level</label>
+                                    <span class="info-tip" data-tip="Controls search area size.&#10;• 15 = neighborhood&#10;• 13 = city&#10;• 11 = metro area">?</span>
+                                </div>
+                                <div class="range-wrapper">
+                                    <input type="range" id="zoom" name="zoom" value="{{.Zoom}}" min="1" max="21" step="1">
+                                    <div class="range-labels">
+                                        <span>1 (World)</span>
+                                        <span class="range-value" id="zoom-value">{{.Zoom}}</span>
+                                        <span>21 (Street)</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </details>
+
+                    <!-- Advanced Options Section -->
+                    <details class="form-section">
+                        <summary class="form-section-header">Advanced Options</summary>
+                        <div class="form-section-body">
+                            <div class="checkbox-wrapper">
+                                <input type="checkbox" id="fastmode" name="fastmode" {{if .FastMode}}checked{{end}}>
+                                <label class="checkbox-label" for="fastmode">
+                                    Fast Mode (BETA)
+                                    <span class="info-tip" data-tip="Skips extra details (reviews, hours, photos) to finish faster. Enable this if you only need names, addresses and phone numbers. Requires lat/lng to be set.">?</span>
+                                </label>
+                            </div>
+
+                            <div class="form-group">
+                                <div class="form-label">
+                                    <label for="radius">Radius (metres)</label>
+                                    <span class="info-tip" data-tip="How far from your pinned location to search (in metres). 1000 = 1 km, 5000 = 5 km, 10000 = 10 km. Only works if you set Latitude &amp; Longitude.">?</span>
+                                </div>
+                                <input type="number" id="radius" name="radius" value="{{.Radius}}" placeholder="10000" min="0">
+                                <span class="validation-error" id="radius-error"></span>
+                            </div>
+
+                            <div class="form-group">
+                                <div class="form-label">
+                                    <label for="depth">Depth <span class="required-indicator">*</span></label>
+                                    <span class="info-tip" data-tip="How far to scroll through results. Each scroll loads ~20 listings.&#10;• 5 = ~100 results (fast)&#10;• 10 = ~200 results (default)&#10;• 20 = ~400 results (slow)&#10;Google caps at ~500 per search.">?</span>
+                                </div>
+                                <input type="number" step="1" id="depth" name="depth" value="{{.Depth}}" placeholder="10" min="1">
+                                <span class="validation-error" id="depth-error"></span>
+                            </div>
+
+                            <div class="checkbox-wrapper">
+                                <input type="checkbox" id="email" name="email" {{if .Email}}checked{{end}}>
+                                <label class="checkbox-label" for="email">
+                                    Fetch Emails
+                                    <span class="info-tip" data-tip="Visits each business website to find contact email addresses. Useful for lead generation. Warning: this makes scraping 3–5× slower.">?</span>
+                                </label>
+                            </div>
+
+                            <div class="form-group">
+                                <div class="form-label">
+                                    <label for="maxtime">Max Job Time <span class="required-indicator">*</span></label>
+                                    <span class="info-tip" data-tip="Stop the job automatically after this time. Examples:&#10;• 30m = 30 minutes&#10;• 2h = 2 hours&#10;• 1h30m = 90 minutes&#10;Minimum 3m.">?</span>
+                                </div>
+                                <input type="text" id="maxtime" name="maxtime" value="{{.MaxTime}}" placeholder="10m or 2h">
+                                <span class="validation-error" id="maxtime-error"></span>
+                            </div>
+                        </div>
+                    </details>
+
+                    <!-- Proxies Section -->
+                    <details class="form-section">
+                        <summary class="form-section-header">Proxies</summary>
+                        <div class="form-section-body">
+                            <div class="form-group">
+                                <div class="form-label">
+                                    <label for="proxies">Proxies (one per line)</label>
+                                    <span class="info-tip" data-tip="Add proxies if Google is blocking or slowing your scrapes. Enter one per line. Rotating proxies give the best results. Leave blank to use your own IP.">?</span>
+                                </div>
+                                <p class="help-text">
+                                    Examples:<br>
+                                    HTTPS: https://user:pass@proxy.local:443<br>
+                                    HTTP: http://user:pass@proxy.local:443<br>
+                                    SOCKS5: socks5://127.0.0.1:8000
+                                </p>
+                                <textarea id="proxies" name="proxies" rows="4">{{.ProxiesString}}</textarea>
+                            </div>
+                        </div>
+                    </details>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn-primary">
+                            🚀 Start Scraping
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Right Panel - Results -->
+            <div class="results-panel">
+                <div class="results-header">
+                    <h2>Scraping Results</h2>
+                    <div id="spinner" class="spinner"></div>
+                </div>
+
+                <div class="table-wrapper">
+                    <table id="job-table">
+                        <thead>
+                            <tr>
+                                <th>Job ID</th>
+                                <th>Job Name</th>
+                                <th>Job Date</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody hx-get="/jobs" hx-trigger="load, every 10s">
+                            <!-- Job rows will be inserted here by HTMX -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // ===== MAP INITIALIZATION =====
+        let map, marker, radiusCircle;
+        const DEFAULT_LAT = 0;
+        const DEFAULT_LNG = 0;
+        const DEFAULT_ZOOM = 2;
+
+        function initMap() {
+            const latInput = document.getElementById('latitude');
+            const lngInput = document.getElementById('longitude');
+            const zoomInput = document.getElementById('zoom');
+            const radiusInput = document.getElementById('radius');
+
+            const initialLat = parseFloat(latInput.value) || DEFAULT_LAT;
+            const initialLng = parseFloat(lngInput.value) || DEFAULT_LNG;
+            const initialZoom = (initialLat === 0 && initialLng === 0) ? DEFAULT_ZOOM : 13;
+
+            map = L.map('location-map').setView([initialLat, initialLng], initialZoom);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(map);
+
+            if (initialLat !== 0 || initialLng !== 0) {
+                setMarker(initialLat, initialLng);
+            }
+
+            map.on('click', function(e) {
+                setMarker(e.latlng.lat, e.latlng.lng);
+                updateInputs(e.latlng.lat, e.latlng.lng);
+            });
+
+            map.on('zoomend', function() {
+                zoomInput.value = map.getZoom();
+                updateZoomDisplay();
+            });
+
+            latInput.addEventListener('change', syncMapFromInputs);
+            lngInput.addEventListener('change', syncMapFromInputs);
+            zoomInput.addEventListener('input', function() {
+                if (map) map.setZoom(parseInt(this.value));
+                updateZoomDisplay();
+                updateRadiusCircle();
+            });
+            radiusInput.addEventListener('change', updateRadiusCircle);
+
+            document.getElementById('locate-me-btn').addEventListener('click', geolocate);
+            document.getElementById('clear-location-btn').addEventListener('click', clearLocation);
+
+            updateZoomDisplay();
+        }
+
+        function setMarker(lat, lng) {
+            if (marker) {
+                marker.setLatLng([lat, lng]);
+            } else {
+                marker = L.marker([lat, lng], { draggable: true }).addTo(map);
+                marker.on('dragend', function(e) {
+                    const pos = e.target.getLatLng();
+                    updateInputs(pos.lat, pos.lng);
+                    updateRadiusCircle();
+                });
+            }
+            updateRadiusCircle();
+        }
+
+        function updateRadiusCircle() {
+            const radiusInput = document.getElementById('radius');
+            const radius = parseInt(radiusInput.value) || 0;
+
+            if (radiusCircle) {
+                map.removeLayer(radiusCircle);
+                radiusCircle = null;
+            }
+
+            if (marker && radius > 0) {
+                radiusCircle = L.circle(marker.getLatLng(), {
+                    radius: radius,
+                    color: '#6366f1',
+                    fillColor: '#6366f1',
+                    fillOpacity: 0.1,
+                    weight: 2
+                }).addTo(map);
+            }
+        }
+
+        function updateInputs(lat, lng) {
+            document.getElementById('latitude').value = lat.toFixed(6);
+            document.getElementById('longitude').value = lng.toFixed(6);
+            validateCoordinates();
+        }
+
+        function syncMapFromInputs() {
+            const lat = parseFloat(document.getElementById('latitude').value);
+            const lng = parseFloat(document.getElementById('longitude').value);
+
+            if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+                setMarker(lat, lng);
+                map.setView([lat, lng], map.getZoom() < 8 ? 13 : map.getZoom());
+            }
+            validateCoordinates();
+        }
+
+        function geolocate() {
+            if (!navigator.geolocation) {
+                alert('Geolocation is not supported by your browser');
+                return;
+            }
+
+            const btn = document.getElementById('locate-me-btn');
+            btn.disabled = true;
+            btn.textContent = 'Locating...';
+
+            navigator.geolocation.getCurrentPosition(
+                function(position) {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    setMarker(lat, lng);
+                    updateInputs(lat, lng);
+                    map.setView([lat, lng], 15);
+                    btn.disabled = false;
+                    btn.innerHTML = '<span class="locate-icon">📍</span> My Location';
+                },
+                function(error) {
+                    alert('Unable to get your location: ' + error.message);
+                    btn.disabled = false;
+                    btn.innerHTML = '<span class="locate-icon">📍</span> My Location';
+                },
+                { enableHighAccuracy: true, timeout: 10000 }
+            );
+        }
+
+        function clearLocation() {
+            if (marker) {
+                map.removeLayer(marker);
+                marker = null;
+            }
+            if (radiusCircle) {
+                map.removeLayer(radiusCircle);
+                radiusCircle = null;
+            }
+            document.getElementById('latitude').value = '0';
+            document.getElementById('longitude').value = '0';
+            map.setView([DEFAULT_LAT, DEFAULT_LNG], DEFAULT_ZOOM);
+            validateCoordinates();
+        }
+
+        function updateZoomDisplay() {
+            const zoom = document.getElementById('zoom').value;
+            document.getElementById('zoom-value').textContent = zoom;
+        }
+
+        // ===== FORM VALIDATION =====
+        const validationRules = {
+            keywords: {
+                validate: (val) => val.trim().length > 0,
+                message: 'At least one keyword is required'
+            },
+            lang: {
+                validate: (val) => /^[a-zA-Z]{2}$/.test(val),
+                message: 'Language must be exactly 2 letters (e.g., en, fr)'
+            },
+            latitude: {
+                validate: (val, form) => {
+                    if (!form.fastmode.checked && (val === '0' || val === '')) return true;
+                    const num = parseFloat(val);
+                    return !isNaN(num) && num >= -90 && num <= 90;
+                },
+                message: 'Latitude must be between -90 and 90'
+            },
+            longitude: {
+                validate: (val, form) => {
+                    if (!form.fastmode.checked && (val === '0' || val === '')) return true;
+                    const num = parseFloat(val);
+                    return !isNaN(num) && num >= -180 && num <= 180;
+                },
+                message: 'Longitude must be between -180 and 180'
+            },
+            radius: {
+                validate: (val) => {
+                    if (val === '' || val === '0') return true;
+                    const num = parseInt(val);
+                    return !isNaN(num) && num >= 0;
+                },
+                message: 'Radius must be 0 or greater'
+            },
+            depth: {
+                validate: (val) => {
+                    const num = parseInt(val);
+                    return !isNaN(num) && num > 0;
+                },
+                message: 'Depth must be greater than 0'
+            },
+            maxtime: {
+                validate: (val) => /^(\d+h)?(\d+m)?$/.test(val) && val.length > 0,
+                message: 'Format: 10m, 2h, or 1h30m (minimum 3m)'
+            }
+        };
+
+        function validateField(input, form) {
+            const rule = validationRules[input.name];
+            if (!rule) return true;
+
+            const isValid = rule.validate(input.value, form);
+            const errorEl = document.getElementById(input.name + '-error');
+
+            input.classList.toggle('input-error', !isValid);
+            if (errorEl) {
+                errorEl.textContent = isValid ? '' : rule.message;
+            }
+
+            return isValid;
+        }
+
+        function validateCoordinates() {
+            const form = document.querySelector('form');
+            validateField(document.getElementById('latitude'), form);
+            validateField(document.getElementById('longitude'), form);
+            updateRequiredIndicators();
+        }
+
+        function updateRequiredIndicators() {
+            const fastMode = document.getElementById('fastmode').checked;
+            document.getElementById('lat-required').style.display = fastMode ? 'inline' : 'none';
+            document.getElementById('lon-required').style.display = fastMode ? 'inline' : 'none';
+        }
+
+        function validateForm(form) {
+            let isValid = true;
+            const inputs = form.querySelectorAll('input:not([type="checkbox"]), textarea');
+
+            inputs.forEach(input => {
+                if (validationRules[input.name] && !validateField(input, form)) {
+                    isValid = false;
+                }
+            });
+
+            if (form.fastmode.checked) {
+                const lat = parseFloat(form.latitude.value);
+                const lng = parseFloat(form.longitude.value);
+                if ((lat === 0 || isNaN(lat)) && (lng === 0 || isNaN(lng))) {
+                    document.getElementById('latitude-error').textContent = 'Required when Fast Mode is enabled';
+                    document.getElementById('longitude-error').textContent = 'Required when Fast Mode is enabled';
+                    document.getElementById('latitude').classList.add('input-error');
+                    document.getElementById('longitude').classList.add('input-error');
+                    isValid = false;
+                }
+            }
+
+            return isValid;
+        }
+
+        // ===== INITIALIZATION =====
+        document.addEventListener('DOMContentLoaded', function() {
+            const locationSection = document.getElementById('location-section');
+            let mapInitialized = false;
+
+            locationSection.addEventListener('toggle', function() {
+                if (this.open && !mapInitialized) {
+                    setTimeout(initMap, 100);
+                    mapInitialized = true;
+                }
+            });
+
+            document.getElementById('fastmode').addEventListener('change', updateRequiredIndicators);
+
+            const form = document.querySelector('form');
+            form.addEventListener('htmx:beforeRequest', function(e) {
+                if (!validateForm(form)) {
+                    e.preventDefault();
+                    document.getElementById('error-container').innerHTML =
+                        'Please fix the validation errors before submitting.';
+                }
+            });
+
+            form.querySelectorAll('input, textarea').forEach(input => {
+                input.addEventListener('blur', function() {
+                    if (validationRules[this.name]) {
+                        validateField(this, form);
+                    }
+                });
+            });
+
+            updateZoomDisplay();
+        });
+    })();
+    </script>
+
+</body>
+
+</html>
