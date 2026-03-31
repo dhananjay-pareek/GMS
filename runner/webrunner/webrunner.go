@@ -5,7 +5,6 @@ import (
 	"encoding/csv"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
@@ -20,6 +19,7 @@ import (
 	"github.com/gosom/google-maps-scraper/runner"
 	"github.com/gosom/google-maps-scraper/tlmt"
 	"github.com/gosom/google-maps-scraper/web"
+	"github.com/gosom/google-maps-scraper/web/gsheets"
 	"github.com/gosom/google-maps-scraper/web/jsonrepo"
 	"github.com/gosom/google-maps-scraper/web/sqlite"
 	"github.com/gosom/scrapemate"
@@ -235,18 +235,26 @@ func (w *webrunner) scrapeJob(ctx context.Context, job *web.Job) error {
 		return w.svc.Update(ctx, job)
 	}
 
-	outpath := filepath.Join(w.cfg.DataFolder, job.ID+".csv")
+	var outfile *os.File
+	var wCsv *csv.Writer
 
-	outfile, err := os.Create(outpath)
-	if err != nil {
-		return err
+	if w.cfg.GoogleSheetID == "" {
+		outpath := filepath.Join(w.cfg.DataFolder, job.ID+".csv")
+		var err error
+		outfile, err = os.Create(outpath)
+		if err != nil {
+			return err
+		}
+
+		defer func() {
+			_ = outfile.Close()
+		}()
+
+		wCsv = csv.NewWriter(outfile)
+		defer wCsv.Flush()
 	}
 
-	defer func() {
-		_ = outfile.Close()
-	}()
-
-	mate, err := w.setupMate(ctx, outfile, job)
+	mate, err := w.setupMate(ctx, wCsv, job)
 	if err != nil {
 		job.Status = web.StatusFailed
 
@@ -340,7 +348,7 @@ func (w *webrunner) scrapeJob(ctx context.Context, job *web.Job) error {
 	return w.svc.Update(ctx, job)
 }
 
-func (w *webrunner) setupMate(_ context.Context, writer io.Writer, job *web.Job) (*scrapemateapp.ScrapemateApp, error) {
+func (w *webrunner) setupMate(_ context.Context, wCsv *csv.Writer, job *web.Job) (*scrapemateapp.ScrapemateApp, error) {
 	opts := []func(*scrapemateapp.Config) error{
 		scrapemateapp.WithConcurrency(w.cfg.Concurrency),
 		scrapemateapp.WithExitOnInactivity(time.Minute * 3),
@@ -377,9 +385,18 @@ func (w *webrunner) setupMate(_ context.Context, writer io.Writer, job *web.Job)
 
 	log.Printf("job %s has proxy: %v", job.ID, hasProxy)
 
-	csvWriter := csvwriter.NewCsvWriter(csv.NewWriter(writer))
+	var writers []scrapemate.ResultWriter
 
-	writers := []scrapemate.ResultWriter{csvWriter}
+	if w.cfg.GoogleSheetID != "" {
+		gsWriter, err := gsheets.New(w.cfg.GoogleSheetID, "Sheet1")
+		if err != nil {
+			return nil, fmt.Errorf("could not init google sheets writer: %w", err)
+		}
+		writers = append(writers, gsWriter)
+	} else {
+		csvWriter := csvwriter.NewCsvWriter(wCsv)
+		writers = append(writers, csvWriter)
+	}
 
 	matecfg, err := scrapemateapp.NewConfig(
 		writers,

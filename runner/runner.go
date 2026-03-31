@@ -82,6 +82,7 @@ type Config struct {
 	ExtraReviews             bool
 	LeadsDBAPIKey            string
 	DBType                   string
+	GoogleSheetID            string
 }
 
 func ParseConfig() *Config {
@@ -148,6 +149,12 @@ func ParseConfig() *Config {
 	flag.BoolVar(&cfg.ExtraReviews, "extra-reviews", false, "enable extra reviews collection")
 	flag.StringVar(&cfg.LeadsDBAPIKey, "leadsdb-api-key", "", "LeadsDB API key for exporting results to LeadsDB")
 	flag.StringVar(&cfg.DBType, "db-type", "sqlite", "type of database for web runner: 'sqlite' or 'json' [default: sqlite]")
+
+	defaultSheetID := ""
+	if sid := os.Getenv("GOOGLE_SHEET_ID"); sid != "" {
+		defaultSheetID = sid
+	}
+	flag.StringVar(&cfg.GoogleSheetID, "google-sheet-id", defaultSheetID, "Google Sheet ID to append results to (reads GOOGLE_SHEET_ID env var)")
 
 	flag.Parse()
 

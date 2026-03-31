@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -417,6 +418,11 @@ func (s *Server) download(w http.ResponseWriter, r *http.Request) {
 
 	file, err := os.Open(filePath)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			w.Header().Set("Content-Type", "text/plain")
+			w.Write([]byte("Results were routed to Google Sheets. No local CSV file was generated."))
+			return
+		}
 		http.Error(w, "Failed to open file", http.StatusInternalServerError)
 		return
 	}
@@ -630,8 +636,8 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 
 	// Basic health check - service is running
 	response := map[string]interface{}{
-		"status": "ok",
-		"service": "google-maps-scraper",
+		"status":    "ok",
+		"service":   "google-maps-scraper",
 		"timestamp": time.Now().UTC().Format(time.RFC3339),
 	}
 
