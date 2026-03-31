@@ -73,12 +73,11 @@ func (j *EmailExtractJob) Process(ctx context.Context, resp *scrapemate.Response
 		return j.Entry, nil, nil
 	}
 
-	doc, ok := resp.Document.(*goquery.Document)
-	if !ok {
-		return j.Entry, nil, nil
+	var emails []string
+	if doc, ok := resp.Document.(*goquery.Document); ok {
+		emails = docEmailExtractor(doc)
 	}
 
-	emails := docEmailExtractor(doc)
 	if len(emails) == 0 {
 		emails = regexEmailExtractor(resp.Body)
 	}
