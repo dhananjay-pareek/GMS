@@ -1,11 +1,24 @@
 <tr>
     <td class="text-mono" style="padding-left: 1.5rem;">{{.ID}}</td>
     <td style="font-weight: 500;">{{.Name}}</td>
-    <td style="color: var(--text-muted);">{{.Date}}</td>
+    <td class="text-sm" style="max-width: 250px;">
+        <details>
+            <summary style="cursor: pointer; font-weight: 500; outline: none; color: #4f46e5;">View Keywords ({{len
+                .Data.Keywords}})</summary>
+            <div
+                style="margin-top: 0.5rem; max-height: 150px; overflow-y: auto; background: #f8fafc; padding: 0.5rem; border-radius: 0.375rem; font-size: 0.75rem; line-height: 1.4; border: 1px solid #e2e8f0;">
+                {{range $i, $kw := .Data.Keywords}}{{if gt $i 0}}<br>{{end}}{{$kw}}{{end}}</div>
+        </details>
+    </td>
+    <td style="color: var(--text-muted);">{{.Date.Format "Jan 02 15:04"}}</td>
     <td>
         <span class="status-badge status-{{.Status}}">
             {{if eq .Status "ok"}}
-            <svg class="icon-sm" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
+            <svg class="icon-sm" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd"
+                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                    clip-rule="evenodd"></path>
+            </svg>
             {{end}}
             {{.Status}}
         </span>
@@ -13,9 +26,11 @@
     <td style="padding-right: 1.5rem;">
         <div class="actions-cell">
             {{if eq .Status "ok"}}
-            <a href="/download?id={{.ID}}" download class="btn-sm btn-sky" style="text-decoration: none; display: inline-flex; align-items: center;">Download</a>
+            <a href="/download?id={{.ID}}" download class="btn-sm btn-sky"
+                style="text-decoration: none; display: inline-flex; align-items: center;">Download</a>
             {{end}}
-            <button hx-delete="/delete?id={{.ID}}" hx-target="closest tr" hx-swap="outerHTML" hx-confirm="Are you sure you want to delete this job?" class="btn-sm btn-red">Delete</button>
+            <button hx-delete="/delete?id={{.ID}}" hx-target="closest tr" hx-swap="outerHTML"
+                hx-confirm="Are you sure you want to delete this job?" class="btn-sm btn-red">Delete</button>
         </div>
     </td>
 </tr>

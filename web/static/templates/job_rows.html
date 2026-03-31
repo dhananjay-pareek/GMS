@@ -2,7 +2,16 @@
 <tr>
     <td class="text-mono" style="padding-left: 1.5rem;">{{.ID}}</td>
     <td style="font-weight: 500;">{{.Name}}</td>
-    <td style="color: var(--text-muted);">{{.Date}}</td>
+    <td class="text-sm" style="max-width: 250px;">
+        <details>
+            <summary style="cursor: pointer; font-weight: 500; outline: none; color: #4f46e5;">View Keywords ({{len
+                .Data.Keywords}})</summary>
+            <div
+                style="margin-top: 0.5rem; max-height: 150px; overflow-y: auto; background: #f8fafc; padding: 0.5rem; border-radius: 0.375rem; font-size: 0.75rem; line-height: 1.4; border: 1px solid #e2e8f0;">
+                {{range $i, $kw := .Data.Keywords}}{{if gt $i 0}}<br>{{end}}{{$kw}}{{end}}</div>
+        </details>
+    </td>
+    <td style="color: var(--text-muted);">{{.Date.Format "Jan 02 15:04"}}</td>
     <td>
         <span class="status-badge status-{{.Status}}">
             {{if eq .Status "ok"}}

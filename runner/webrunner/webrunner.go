@@ -20,6 +20,7 @@ import (
 	"github.com/gosom/google-maps-scraper/runner"
 	"github.com/gosom/google-maps-scraper/tlmt"
 	"github.com/gosom/google-maps-scraper/web"
+	"github.com/gosom/google-maps-scraper/web/jsonrepo"
 	"github.com/gosom/google-maps-scraper/web/sqlite"
 	"github.com/gosom/scrapemate"
 	"github.com/gosom/scrapemate/adapters/writers/csvwriter"
@@ -42,11 +43,17 @@ func New(cfg *runner.Config) (runner.Runner, error) {
 		return nil, err
 	}
 
-	const dbfname = "jobs.db"
+	var repo web.JobRepository
+	var err error
 
-	dbpath := filepath.Join(cfg.DataFolder, dbfname)
+	if cfg.DBType == "json" {
+		dbpath := filepath.Join(cfg.DataFolder, "jobs.json")
+		repo, err = jsonrepo.New(dbpath)
+	} else {
+		dbpath := filepath.Join(cfg.DataFolder, "jobs.db")
+		repo, err = sqlite.New(dbpath)
+	}
 
-	repo, err := sqlite.New(dbpath)
 	if err != nil {
 		return nil, err
 	}
