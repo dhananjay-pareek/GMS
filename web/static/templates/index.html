@@ -17,7 +17,10 @@
     <main class="dashboard-container">
         <!-- Configuration Section -->
         <section class="card config-panel">
-            <h1 class="section-title">Configuration</h1>
+            <div class="header-with-actions">
+                <h1 class="section-title">Configuration</h1>
+                <button type="button" class="btn-info" id="info-btn" title="How to use">?</button>
+            </div>
             <div id="error-container" class="error-message" style="display: none;"></div>
 
             <form hx-post="/scrape" hx-target="#job-table tbody" hx-swap="beforeend" hx-indicator="#spinner"
@@ -73,6 +76,11 @@
                         </summary>
                         <div class="accordion-content">
                             <div id="map-container">
+                                <div class="map-search-container">
+                                    <input type="text" id="place-search-input" class="map-search-input"
+                                        placeholder="Search a place (e.g. Seattle, WA)" />
+                                    <button type="button" id="place-search-btn" class="btn-secondary">🔍 Find</button>
+                                </div>
                                 <div id="location-map"></div>
                                 <div class="map-controls">
                                     <button type="button" id="locate-me-btn" class="btn-secondary">📍 My
@@ -198,6 +206,91 @@
         </section>
     </main>
 
+    <!-- Info Modal -->
+    <div class="modal-overlay" id="info-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Configuration Guide</h2>
+                <button type="button" class="modal-close" id="modal-close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="info-item">
+                    <span class="info-name">Search a place (Map)</span>
+                    <span class="info-desc">Type a location name (e.g., "Seattle, WA") into the map search bar and click
+                        "Find". The map will automatically fetch the coordinates for you.</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-name">Job Name</span>
+                    <span class="info-desc">An optional friendly name to identify your scraping job in the results
+                        table.</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-name">Keywords</span>
+                    <span class="info-desc">The search terms you want to scrape (e.g., "restaurants in New York"). Put
+                        one search per line.</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-name">Language</span>
+                    <span class="info-desc">The 2-letter language code for the Google Maps results (e.g., "en" for
+                        English, "es" for Spanish).</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-name">Location Settings (Map / Coordinates)</span>
+                    <span class="info-desc">Set a specific central location using the interactive map or by entering
+                        exact Latitude and Longitude. Used with Radius to define a search area.</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-name">📍 My Location</span>
+                    <span class="info-desc">Automatically detects and sets your current geographical coordinates on the
+                        interactive map.</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-name">Clear</span>
+                    <span class="info-desc">Removes the selected location from the map and resets coordinates.</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-name">Zoom Level</span>
+                    <span class="info-desc">The zoom level of the map. Higher zoom means a closer view of the
+                        location.</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-name">Fast Mode (BETA)</span>
+                    <span class="info-desc">Speeds up scraping by using a different grid-based coordinate technique.
+                        Requires Latitude and Longitude to be set.</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-name">Radius</span>
+                    <span class="info-desc">The search radius in meters around the central coordinate point (e.g., 5000
+                        for 5km).</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-name">Depth</span>
+                    <span class="info-desc">How far deep to scrape the results (number of scrolls or pages). Higher
+                        means more results but slower execution.</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-name">Fetch Emails</span>
+                    <span class="info-desc">When enabled, the scraper will visit business websites to attempt to extract
+                        email addresses and social links.</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-name">Max Job Time</span>
+                    <span class="info-desc">The maximum allowed running time before the job forcefully stops (e.g.,
+                        "10m" for 10 minutes, "2h" for 2 hours).</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-name">Proxies</span>
+                    <span class="info-desc">A list of HTTP proxies to use for the scraping job, one per line. Helpful to
+                        avoid rate limiting blocks.</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-name">Start Scraping</span>
+                    <span class="info-desc">Submits the configuration and queues the scraping job.</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         (function () {
             'use strict';
@@ -252,6 +345,15 @@
 
                 document.getElementById('locate-me-btn').addEventListener('click', geolocate);
                 document.getElementById('clear-location-btn').addEventListener('click', clearLocation);
+
+                // Setup Place search
+                document.getElementById('place-search-btn').addEventListener('click', searchPlace);
+                document.getElementById('place-search-input').addEventListener('keypress', function (e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        searchPlace();
+                    }
+                });
             }
 
             function setMarker(lat, lng) {
@@ -345,8 +447,46 @@
                 }
                 document.getElementById('latitude').value = '0';
                 document.getElementById('longitude').value = '0';
+                document.getElementById('place-search-input').value = '';
                 map.setView([DEFAULT_LAT, DEFAULT_LNG], DEFAULT_ZOOM);
                 validateCoordinates();
+            }
+
+            function searchPlace() {
+                const searchInput = document.getElementById('place-search-input');
+                const btn = document.getElementById('place-search-btn');
+                const query = searchInput.value.trim();
+
+                if (!query) return;
+
+                btn.disabled = true;
+                btn.textContent = '⏳...';
+
+                // Use OpenStreetMap Nominatim for geocoding
+                fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data && data.length > 0) {
+                            const lat = parseFloat(data[0].lat);
+                            const lng = parseFloat(data[0].lon);
+
+                            setMarker(lat, lng);
+                            updateInputs(lat, lng);
+
+                            // Adjust zoom based on importance if available, otherwise default to 13
+                            map.setView([lat, lng], 13);
+                        } else {
+                            alert('Location not found. Please try a different search term.');
+                        }
+                    })
+                    .catch(err => {
+                        console.error('Geocoding error:', err);
+                        alert('Failed to search location. Please try again.');
+                    })
+                    .finally(() => {
+                        btn.disabled = false;
+                        btn.textContent = '🔍 Find';
+                    });
             }
 
             // ===== FORM VALIDATION =====
@@ -403,6 +543,27 @@
                         errContainer.textContent = 'Please fix the validation errors before submitting.';
                     }
                 });
+
+                // ===== MODAL LOGIC =====
+                const infoBtn = document.getElementById('info-btn');
+                const infoModal = document.getElementById('info-modal');
+                const modalCloseBtn = document.getElementById('modal-close-btn');
+
+                if (infoBtn && infoModal && modalCloseBtn) {
+                    infoBtn.addEventListener('click', () => {
+                        infoModal.classList.add('active');
+                    });
+
+                    modalCloseBtn.addEventListener('click', () => {
+                        infoModal.classList.remove('active');
+                    });
+
+                    infoModal.addEventListener('click', (e) => {
+                        if (e.target === infoModal) {
+                            infoModal.classList.remove('active');
+                        }
+                    });
+                }
             });
         })();
     </script>

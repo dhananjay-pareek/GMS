@@ -43,7 +43,7 @@ func ParseSearchResults(raw []byte) ([]*Entry, error) {
 		entry.ID = getNthElementAndCast[string](business, 0)
 		entry.Title = getNthElementAndCast[string](business, 11)
 		entry.Categories = toStringSlice(getNthElementAndCast[[]any](business, 13))
-		entry.WebSite = getNthElementAndCast[string](business, 7, 0)
+		entry.WebSite = extractWebsite(business)
 
 		entry.ReviewRating = getNthElementAndCast[float64](business, 4, 7)
 		entry.ReviewCount = int(getNthElementAndCast[float64](business, 4, 8))
@@ -66,7 +66,7 @@ func ParseSearchResults(raw []byte) ([]*Entry, error) {
 
 		entry.Latitude = getNthElementAndCast[float64](business, 9, 2)
 		entry.Longtitude = getNthElementAndCast[float64](business, 9, 3)
-		entry.Phone = strings.ReplaceAll(getNthElementAndCast[string](business, 178, 0, 0), " ", "")
+		entry.Phone = strings.ReplaceAll(extractPhone(business), " ", "")
 		entry.OpenHours = getHours(business)
 		entry.Status = getNthElementAndCast[string](business, 34, 4, 4)
 		entry.Timezone = getNthElementAndCast[string](business, 30)

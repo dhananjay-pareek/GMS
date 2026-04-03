@@ -330,8 +330,8 @@ func EntryFromJSON(raw []byte, reviewCountOnly ...bool) (entry Entry, err error)
 	)
 	entry.OpenHours = getHours(darray)
 	entry.PopularTimes = getPopularTimes(darray)
-	entry.WebSite = extractActualURL(getNthElementAndCast[string](darray, 7, 0))
-	entry.Phone = getNthElementAndCast[string](darray, 178, 0, 0)
+	entry.WebSite = extractWebsite(darray)
+	entry.Phone = extractPhone(darray)
 	entry.PlusCode = getNthElementAndCast[string](darray, 183, 2, 2, 0)
 	entry.ReviewRating = getNthElementAndCast[float64](darray, 4, 7)
 	entry.Latitude = getNthElementAndCast[float64](darray, 9, 2)
@@ -776,6 +776,56 @@ func extractActualURL(googleURL string) string {
 	}
 
 	return actualURL
+}
+
+func extractWebsite(darray []any) string {
+	val := extractActualURL(getNthElementAndCast[string](darray, 7, 0))
+	if val != "" {
+		return val
+	}
+
+	val = extractActualURL(getNthElementAndCast[string](darray, 7, 1))
+	if val != "" {
+		return val
+	}
+
+	// Fallback to alternative index pattern sometimes seen in results
+	val = extractActualURL(getNthElementAndCast[string](darray, 14, 0))
+	return val
+}
+
+func extractPhone(darray []any) string {
+	phone := getNthElementAndCast[string](darray, 178, 0, 0)
+	if phone != "" {
+		return phone
+	}
+
+	phone = getNthElementAndCast[string](darray, 178, 0, 3)
+	if phone != "" {
+		return phone
+	}
+
+	// Sometimes it's buried in an array at 178,0
+	arr := getNthElementAndCast[[]any](darray, 178, 0)
+	for _, v := range arr {
+		if s, ok := v.(string); ok && s != "" && (strings.HasPrefix(s, "+") || strings.ContainsAny(s, "0123456789")) {
+			// Basic heuristic to skip non-phone strings here, assuming phone consists of digits or +
+			return s
+		}
+	}
+
+	phone = getNthElementAndCast[string](darray, 35, 1)
+	if phone != "" {
+		return phone
+	}
+
+	phone = getNthElementAndCast[string](darray, 4, 3, 0)
+	// some old structures
+	if phone != "" && strings.ContainsAny(phone, "0123456789") && !strings.Contains(phone, "http") {
+		return phone
+	}
+
+	return ""
 }
 
 type EntryWithDistance struct {
