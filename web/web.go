@@ -168,18 +168,19 @@ func (s *Server) Start(ctx context.Context) error {
 }
 
 type formData struct {
-	Name     string
-	MaxTime  string
-	Keywords []string
-	Language string
-	Zoom     int
-	FastMode bool
-	Radius   int
-	Lat      string
-	Lon      string
-	Depth    int
-	Email    bool
-	Proxies  []string
+	Name          string
+	MaxTime       string
+	Keywords      []string
+	Language      string
+	Zoom          int
+	FastMode      bool
+	Radius        int
+	Lat           string
+	Lon           string
+	Depth         int
+	Email         bool
+	Proxies       []string
+	GoogleSheetID string
 }
 
 type ctxKey string
@@ -231,17 +232,18 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := formData{
-		Name:     "",
-		MaxTime:  "10m",
-		Keywords: []string{},
-		Language: "en",
-		Zoom:     15,
-		FastMode: false,
-		Radius:   10000,
-		Lat:      "0",
-		Lon:      "0",
-		Depth:    10,
-		Email:    false,
+		Name:          "",
+		MaxTime:       "10m",
+		Keywords:      []string{},
+		Language:      "en",
+		Zoom:          15,
+		FastMode:      false,
+		Radius:        10000,
+		Lat:           "0",
+		Lon:           "0",
+		Depth:         10,
+		Email:         false,
+		GoogleSheetID: os.Getenv("GOOGLE_SHEET_ID"),
 	}
 
 	_ = tmpl.Execute(w, data)
@@ -334,6 +336,8 @@ func (s *Server) scrape(w http.ResponseWriter, r *http.Request) {
 	}
 
 	newJob.Data.Email = r.Form.Get("email") == "on"
+
+	newJob.Data.GoogleSheetID = strings.TrimSpace(r.Form.Get("google_sheet_id"))
 
 	proxies := strings.Split(r.Form.Get("proxies"), "\n")
 	if len(proxies) > 0 {

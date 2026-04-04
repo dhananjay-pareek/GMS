@@ -386,12 +386,21 @@ func (w *webrunner) setupMate(_ context.Context, wCsv *csv.Writer, job *web.Job)
 
 	var writers []scrapemate.ResultWriter
 
-	if w.cfg.GoogleSheetID != "" {
-		gsWriter, err := gsheets.New(w.cfg.GoogleSheetID, "Sheet1")
+	// Determine which Google Sheet ID to use: per-job first, then global config
+	sheetID := job.Data.GoogleSheetID
+	if sheetID == "" {
+		sheetID = w.cfg.GoogleSheetID
+	}
+
+	if sheetID != "" {
+		gsWriter, err := gsheets.New(sheetID, "Sheet1")
 		if err != nil {
-			return nil, fmt.Errorf("could not init google sheets writer: %w", err)
+			// Non-fatal: log warning and continue with CSV-only
+			log.Printf("WARNING: Google Sheets init failed (sheet=%s): %v — continuing with CSV only", sheetID, err)
+		} else {
+			writers = append(writers, gsWriter)
+			log.Printf("Google Sheets writer active for sheet: %s", sheetID)
 		}
-		writers = append(writers, gsWriter)
 	}
 
 	csvWriter := csvwriter.NewCsvWriter(wCsv)
