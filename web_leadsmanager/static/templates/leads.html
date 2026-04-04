@@ -14,9 +14,24 @@
         <div class="top-bar-inner">
             <h1 class="logo">Rankernet's <span>LeadsPilot</span></h1>
             <nav class="top-nav">
-                <input type="password" id="gemini-api-key" placeholder="Enter Gemini API Key (Optional)"
-                    style="padding: 0.5rem; border-radius: 4px; border: 1px solid #ddd; font-size: 0.85rem; width: 250px; margin-right: 1rem;">
-                <a href="/" class="nav-link active">Dashboard</a>
+                <select id="llm-provider"
+                    style="padding: 0.5rem; border-radius: 4px; border: 1px solid #ddd; font-size: 0.85rem; margin-right: 0.5rem; background: #fff;">
+                    <option value="gemini">Gemini (Google)</option>
+                    <option value="openai">OpenAI (GPT-4o)</option>
+                    <option value="anthropic">Anthropic (Claude)</option>
+                    <option value="cohere">Cohere</option>
+                    <option value="mistral">Mistral</option>
+                    <option value="groq">Groq</option>
+                    <option value="together">Together AI</option>
+                    <option value="replicate">Replicate</option>
+                    <option value="huggingface">HuggingFace</option>
+                    <option value="perplexity">Perplexity</option>
+                    <option value="ollama">Ollama (Local URL)</option>
+                </select>
+                <input type="password" id="llm-api-key" placeholder="Enter API Key or Host URL"
+                    style="padding: 0.5rem; border-radius: 4px; border: 1px solid #ddd; font-size: 0.85rem; width: 250px; margin-right: 0.5rem;">
+                <input type="text" id="llm-model" placeholder="Model (Optional)"
+                    style="padding: 0.5rem; border-radius: 4px; border: 1px solid #ddd; font-size: 0.85rem; width: 150px; margin-right: 1rem;">
             </nav>
         </div>
     </header>
@@ -162,9 +177,14 @@
             try {
                 let url = `/api/enrich/${action}?place_id=${encodeURIComponent(placeId)}`;
                 if (action === 'pitch') {
-                    const apiKey = document.getElementById('gemini-api-key').value;
+                    const apiKey = document.getElementById('llm-api-key').value;
+                    const provider = document.getElementById('llm-provider').value;
+                    const modelName = document.getElementById('llm-model').value;
                     if (apiKey) {
-                        url += `&api_key=${encodeURIComponent(apiKey)}`;
+                        url += `&api_key=${encodeURIComponent(apiKey)}&provider=${encodeURIComponent(provider)}`;
+                    }
+                    if (modelName) {
+                        url += `&model=${encodeURIComponent(modelName)}`;
                     }
                 }
 

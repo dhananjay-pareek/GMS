@@ -373,7 +373,7 @@ type GeneratePitchRequest struct {
 }
 
 // GeneratePitchPrompt builds a pitch prompt from lead data (client-side API call).
-func (e *Enricher) GeneratePitchPrompt(ctx context.Context, placeID, persona, apiKey string) (string, error) {
+func (e *Enricher) GeneratePitchPrompt(ctx context.Context, placeID, persona, apiKey, provider, modelName string) (string, error) {
 	lead, err := e.db.GetLead(ctx, placeID)
 	if err != nil {
 		return "", err
@@ -442,11 +442,27 @@ Instructions:
 		return prompt, nil
 	}
 
-	return e.callGemini(ctx, prompt, apiKey)
+	if provider == "" {
+		provider = "gemini"
+	}
+
+	switch provider {
+	case "gemini":
+		return e.callGemini(ctx, prompt, apiKey, modelName)
+	case "anthropic":
+		return e.callAnthropic(ctx, prompt, apiKey, modelName)
+	case "cohere":
+		return e.callCohere(ctx, prompt, apiKey, modelName)
+	default:
+		return e.callOpenAICompatible(ctx, prompt, apiKey, provider, modelName)
+	}
 }
 
-func (e *Enricher) callGemini(ctx context.Context, prompt, apiKey string) (string, error) {
-	url := "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + apiKey
+func (e *Enricher) callGemini(ctx context.Context, prompt, apiKey, modelName string) (string, error) {
+	if modelName == "" {
+		modelName = "gemini-1.5-flash"
+	}
+	url := "https://generativelanguage.googleapis.com/v1beta/models/" + modelName + ":generateContent?key=" + apiKey
 
 	payload := map[string]any{
 		"contents": []map[string]any{
@@ -495,4 +511,164 @@ func (e *Enricher) callGemini(ctx context.Context, prompt, apiKey string) (strin
 	}
 
 	return "", fmt.Errorf("no content returned from gemini")
+}
+
+func (e *Enricher) callOpenAICompatible(ctx context.Context, prompt, apiKey, provider, customModel string) (string, error) {
+	var url, model string
+	switch provider {
+	case "openai":
+		url, model = "https://api.openai.com/v1/chat/completions", "gpt-4o-mini"
+	case "groq":
+		url, model = "https://api.groq.com/openai/v1/chat/completions", "llama3-8b-8192"
+	case "mistral":
+		url, model = "https://api.mistral.ai/v1/chat/completions", "mistral-large-latest"
+	case "together":
+		url, model = "https://api.together.xyz/v1/chat/completions", "meta-llama/Llama-3-70b-chat-hf"
+	case "perplexity":
+		url, model = "https://api.perplexity.ai/chat/completions", "llama-3-sonar-large-32k-chat"
+	case "replicate":
+		url, model = "https://openai-proxy.replicate.com/v1/chat/completions", "meta/llama-3-70b-instruct"
+	case "huggingface":
+		url, model = "https://api-inference.huggingface.co/v1/chat/completions", "meta-llama/Meta-Llama-3-8B-Instruct"
+	case "ollama":
+		if strings.HasPrefix(apiKey, "http") {
+			url = strings.TrimSuffix(apiKey, "/") + "/v1/chat/completions"
+		} else {
+			url = "http://localhost:11434/v1/chat/completions"
+		}
+		model = "llama3"
+	default:
+		return "", fmt.Errorf("unsupported provider: %s", provider)
+	}
+
+	if customModel != "" {
+		model = customModel
+	}
+
+	payload := map[string]any{
+		"model": model,
+		"messages": []map[string]any{
+			{"role": "user", "content": prompt},
+		},
+	}
+	bodyBytes, _ := json.Marshal(payload)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if provider != "ollama" || !strings.HasPrefix(apiKey, "http") {
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+	}
+
+	resp, err := e.httpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyStr, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("%s api error: %d - %s", provider, resp.StatusCode, string(bodyStr))
+	}
+
+	var result struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
+	if len(result.Choices) > 0 {
+		return result.Choices[0].Message.Content, nil
+	}
+	return "", fmt.Errorf("no content returned from %s", provider)
+}
+
+func (e *Enricher) callAnthropic(ctx context.Context, prompt, apiKey, modelName string) (string, error) {
+	if modelName == "" {
+		modelName = "claude-3-5-sonnet-20241022"
+	}
+	url := "https://api.anthropic.com/v1/messages"
+	payload := map[string]any{
+		"model":      modelName,
+		"max_tokens": 1024,
+		"messages": []map[string]any{
+			{"role": "user", "content": prompt},
+		},
+	}
+	bodyBytes, _ := json.Marshal(payload)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-api-key", apiKey)
+	req.Header.Set("anthropic-version", "2023-06-01")
+
+	resp, err := e.httpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyStr, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("anthropic api error: %d - %s", resp.StatusCode, string(bodyStr))
+	}
+
+	var result struct {
+		Content []struct {
+			Text string `json:"text"`
+		} `json:"content"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
+	if len(result.Content) > 0 {
+		return result.Content[0].Text, nil
+	}
+	return "", fmt.Errorf("no content returned from anthropic")
+}
+
+func (e *Enricher) callCohere(ctx context.Context, prompt, apiKey, modelName string) (string, error) {
+	if modelName == "" {
+		modelName = "command-r-plus"
+	}
+	url := "https://api.cohere.com/v1/chat"
+	payload := map[string]any{
+		"model":   modelName,
+		"message": prompt,
+	}
+	bodyBytes, _ := json.Marshal(payload)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+
+	resp, err := e.httpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyStr, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("cohere api error: %d - %s", resp.StatusCode, string(bodyStr))
+	}
+
+	var result struct {
+		Text string `json:"text"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
+	return result.Text, nil
 }

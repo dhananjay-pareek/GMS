@@ -22,6 +22,7 @@ import (
 	"github.com/gosom/google-maps-scraper/web/gsheets"
 	"github.com/gosom/google-maps-scraper/web/jsonrepo"
 	"github.com/gosom/google-maps-scraper/web/sqlite"
+	"github.com/gosom/google-maps-scraper/webhookwriter"
 	"github.com/gosom/scrapemate"
 	"github.com/gosom/scrapemate/adapters/writers/csvwriter"
 	"github.com/gosom/scrapemate/scrapemateapp"
@@ -238,21 +239,19 @@ func (w *webrunner) scrapeJob(ctx context.Context, job *web.Job) error {
 	var outfile *os.File
 	var wCsv *csv.Writer
 
-	if w.cfg.GoogleSheetID == "" {
-		outpath := filepath.Join(w.cfg.DataFolder, job.ID+".csv")
-		var err error
-		outfile, err = os.Create(outpath)
-		if err != nil {
-			return err
-		}
-
-		defer func() {
-			_ = outfile.Close()
-		}()
-
-		wCsv = csv.NewWriter(outfile)
-		defer wCsv.Flush()
+	outpath := filepath.Join(w.cfg.DataFolder, job.ID+".csv")
+	var errOut error
+	outfile, errOut = os.Create(outpath)
+	if errOut != nil {
+		return errOut
 	}
+
+	defer func() {
+		_ = outfile.Close()
+	}()
+
+	wCsv = csv.NewWriter(outfile)
+	defer wCsv.Flush()
 
 	mate, err := w.setupMate(ctx, wCsv, job)
 	if err != nil {
@@ -393,9 +392,13 @@ func (w *webrunner) setupMate(_ context.Context, wCsv *csv.Writer, job *web.Job)
 			return nil, fmt.Errorf("could not init google sheets writer: %w", err)
 		}
 		writers = append(writers, gsWriter)
-	} else {
-		csvWriter := csvwriter.NewCsvWriter(wCsv)
-		writers = append(writers, csvWriter)
+	}
+
+	csvWriter := csvwriter.NewCsvWriter(wCsv)
+	writers = append(writers, csvWriter)
+
+	if w.cfg.WebhookURL != "" {
+		writers = append(writers, webhookwriter.New(w.cfg.WebhookURL))
 	}
 
 	matecfg, err := scrapemateapp.NewConfig(

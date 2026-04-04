@@ -419,8 +419,7 @@ func (s *Server) download(w http.ResponseWriter, r *http.Request) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			w.Header().Set("Content-Type", "text/plain")
-			w.Write([]byte("Results were routed to Google Sheets. No local CSV file was generated."))
+			http.Error(w, "Results CSV file not found (it may have been deleted or the job failed).", http.StatusNotFound)
 			return
 		}
 		http.Error(w, "Failed to open file", http.StatusInternalServerError)

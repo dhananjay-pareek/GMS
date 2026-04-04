@@ -14,6 +14,7 @@ import (
 	"github.com/gosom/google-maps-scraper/leadsdb"
 	"github.com/gosom/google-maps-scraper/runner"
 	"github.com/gosom/google-maps-scraper/tlmt"
+	"github.com/gosom/google-maps-scraper/webhookwriter"
 	"github.com/gosom/scrapemate"
 	"github.com/gosom/scrapemate/adapters/writers/csvwriter"
 	"github.com/gosom/scrapemate/adapters/writers/jsonwriter"
@@ -183,6 +184,10 @@ func (r *fileRunner) setWriters() error {
 		} else {
 			r.writers = append(r.writers, csvWriter)
 		}
+	}
+
+	if r.cfg.WebhookURL != "" {
+		r.writers = append(r.writers, webhookwriter.New(r.cfg.WebhookURL))
 	}
 
 	return nil

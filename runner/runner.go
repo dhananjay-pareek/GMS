@@ -83,6 +83,7 @@ type Config struct {
 	LeadsDBAPIKey            string
 	DBType                   string
 	GoogleSheetID            string
+	WebhookURL               string
 }
 
 func ParseConfig() *Config {
@@ -155,6 +156,9 @@ func ParseConfig() *Config {
 		defaultSheetID = sid
 	}
 	flag.StringVar(&cfg.GoogleSheetID, "google-sheet-id", defaultSheetID, "Google Sheet ID to append results to (reads GOOGLE_SHEET_ID env var)")
+
+	defaultWebhook := os.Getenv("WEBHOOK_URL")
+	flag.StringVar(&cfg.WebhookURL, "webhook-url", defaultWebhook, "Webhook URL to POST exported leads to (reads WEBHOOK_URL env var)")
 
 	flag.Parse()
 
