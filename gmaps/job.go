@@ -125,7 +125,7 @@ func (j *GmapJob) Process(ctx context.Context, resp *scrapemate.Response) (any, 
 
 		next = append(next, placeJob)
 	} else {
-		doc.Find(`div[role=feed] div[jsaction]>a`).Each(func(_ int, s *goquery.Selection) {
+		doc.Find(`div[role=feed] a[href*='/maps/place/']`).Each(func(_ int, s *goquery.Selection) {
 			if href := s.AttrOr("href", ""); href != "" {
 				jopts := []PlaceJobOptions{}
 				if j.ExitMonitor != nil {

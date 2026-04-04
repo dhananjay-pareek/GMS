@@ -1,0 +1,26 @@
+{
+  "name": "gmap-new",
+  "version": "1.0.0",
+  "description": "> ✅ **Repository synced on March 30, 2026** - All files updated from source repository",
+  "main": "dump_dom.js",
+  "directories": {
+    "example": "examples"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dhananjay-pareek/GMS.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/dhananjay-pareek/GMS/issues"
+  },
+  "homepage": "https://github.com/dhananjay-pareek/GMS#readme",
+  "dependencies": {
+    "playwright": "^1.59.1"
+  }
+}

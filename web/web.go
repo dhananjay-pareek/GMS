@@ -656,9 +656,9 @@ func securityHeaders(next http.Handler) http.Handler {
 				"script-src 'self' cdn.redoc.ly cdnjs.cloudflare.com unpkg.com 'unsafe-inline' 'unsafe-eval'; "+
 				"worker-src 'self' blob:; "+
 				"style-src 'self' 'unsafe-inline' fonts.googleapis.com unpkg.com; "+
-				"img-src 'self' data: cdn.redoc.ly *.tile.openstreetmap.org; "+
+				"img-src 'self' data: cdn.redoc.ly *.tile.openstreetmap.org unpkg.com; "+
 				"font-src 'self' fonts.gstatic.com; "+
-				"connect-src 'self'")
+				"connect-src 'self' nominatim.openstreetmap.org unpkg.com")
 
 		next.ServeHTTP(w, r)
 	})

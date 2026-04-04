@@ -1,0 +1,72 @@
+{{range .Leads}}
+<tr class="lead-row" data-place-id="{{.PlaceID}}">
+    <td class="lead-title-cell">
+        <div class="lead-title">{{.Title}}</div>
+        <div class="lead-address text-muted">{{truncate .Address 40}}</div>
+    </td>
+    <td><span class="category-badge">{{.Category}}</span></td>
+    <td>{{.City}}</td>
+    <td class="{{if not .IsPhoneValid}}cell-warn{{end}}">
+        {{if .Phone}}{{.Phone}}{{else}}<span class="text-muted">—</span>{{end}}
+    </td>
+    <td>
+        {{if gt .ReviewRating 0.0}}
+        <span class="rating-badge {{if lt .ReviewRating 4.0}}rating-low{{else}}rating-good{{end}}">
+            ★ {{formatRating .ReviewRating}}
+        </span>
+        {{else}}
+        <span class="text-muted">—</span>
+        {{end}}
+    </td>
+    <td>{{.ReviewCount}}</td>
+    <td>
+        {{if .Website}}
+        <a href="{{.Website}}" target="_blank" rel="noopener" class="website-link" title="{{.Website}}">🔗</a>
+        {{else}}
+        <span class="text-muted">—</span>
+        {{end}}
+    </td>
+    <td>{{boolIcon .HasSSL}}</td>
+    <td class="tags-cell">
+        {{range .ServiceTags}}
+        <span class="service-tag">{{.}}</span>
+        {{end}}
+    </td>
+    <td class="actions-cell">
+        {{if .Website}}
+        <button class="btn-action btn-action-blue" onclick="runAction('techstack','{{.PlaceID}}',this)"
+            title="Detect Tech Stack">🔧</button>
+        <button class="btn-action btn-action-green" onclick="runAction('pagespeed','{{.PlaceID}}',this)"
+            title="Run PageSpeed">⚡</button>
+        <button class="btn-action btn-action-purple" onclick="runAction('screenshot','{{.PlaceID}}',this)"
+            title="Take Screenshot">📸</button>
+        <button class="btn-action btn-action-orange" onclick="runAction('contacts','{{.PlaceID}}',this)"
+            title="Find Contacts">👤</button>
+        {{end}}
+        <button class="btn-action btn-action-pink" onclick="runAction('pitch','{{.PlaceID}}',this)"
+            title="Generate Pitch">✉️</button>
+    </td>
+</tr>
+{{end}}
+
+{{if eq (len .Leads) 0}}
+<tr>
+    <td colspan="10" class="empty-state">
+        <div class="empty-icon">📭</div>
+        <div class="empty-text">No leads found</div>
+        <div class="empty-sub">Import scraped data via POST /api/import or adjust your filters.</div>
+    </td>
+</tr>
+{{end}}
+
+{{if and (gt .Pages 1) (lt .Page .Pages)}}
+<tr id="load-more-row">
+    <td colspan="10" style="text-align:center; padding:1.5rem;">
+        <button class="btn-load-more"
+            hx-get="/lead-rows?page={{add .Page 1}}&search={{.Search}}&city={{.City}}&category={{.Category}}&tag={{.Tag}}"
+            hx-target="#leads-tbody" hx-swap="innerHTML" hx-indicator="#table-spinner">
+            Load More (Page {{add .Page 1}} of {{.Pages}})
+        </button>
+    </td>
+</tr>
+{{end}}

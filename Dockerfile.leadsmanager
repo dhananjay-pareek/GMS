@@ -1,0 +1,27 @@
+# Build stage
+FROM golang:1.25.6-alpine AS builder
+
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+# Build the Leads Manager statically
+# The go:embed package handles bundling HTML/CSS templates
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /usr/bin/leadsmanager ./cmd/leadsmanager
+
+# Final minimal stage
+FROM alpine:latest
+
+# Needed for making secure HTTPS requests to external APIs (OpenAI, Gemini, Supabase)
+RUN apk --no-cache add ca-certificates
+
+WORKDIR /app
+COPY --from=builder /usr/bin/leadsmanager /app/leadsmanager
+
+# Render automatically sets the PORT environment variable
+ENV PORT=9090
+EXPOSE 9090
+
+ENTRYPOINT ["/app/leadsmanager"]

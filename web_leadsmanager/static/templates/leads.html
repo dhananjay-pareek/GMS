@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Leads Manager — Agency CRM</title>
+    <link rel="stylesheet" href="/static/css/leads.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/htmx/1.9.6/htmx.min.js"></script>
+</head>
+
+<body>
+    <header class="top-bar">
+        <div class="top-bar-inner">
+            <h1 class="logo">Rankernet's <span>LeadsPilot</span></h1>
+            <nav class="top-nav">
+                <a href="/" class="nav-link active">Dashboard</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="main-container">
+        <!-- Stats Row -->
+        <section class="stats-row" id="stats-row" hx-get="/api/stats" hx-trigger="load, every 30s" hx-swap="innerHTML">
+            <div class="stat-card">
+                <span class="stat-value">—</span>
+                <span class="stat-label">Total Leads</span>
+            </div>
+        </section>
+
+        <!-- Filters -->
+        <section class="card filter-bar">
+            <form id="filter-form" hx-get="/lead-rows" hx-target="#leads-tbody" hx-swap="innerHTML" hx-trigger="submit"
+                hx-push-url="false" hx-indicator="#table-spinner">
+                <div class="filter-row">
+                    <input type="text" name="search" id="filter-search" placeholder="🔍 Search leads..."
+                        class="filter-input filter-input-wide" />
+                    <input type="text" name="city" id="filter-city" placeholder="City" class="filter-input" />
+                    <input type="text" name="category" id="filter-category" placeholder="Category"
+                        class="filter-input" />
+                    <select name="tag" id="filter-tag" class="filter-input">
+                        <option value="">All Tags</option>
+                        <option value="No Website">No Website</option>
+                        <option value="No SSL">No SSL</option>
+                        <option value="No Analytics">No Analytics</option>
+                        <option value="Missing Pixel">Missing Pixel</option>
+                        <option value="Needs SEO">Needs SEO</option>
+                        <option value="Low Rating">Low Rating</option>
+                        <option value="Few Reviews">Few Reviews</option>
+                        <option value="Unclaimed GMB">Unclaimed GMB</option>
+                        <option value="No Email">No Email</option>
+                        <option value="No Phone">No Phone</option>
+                        <option value="Slow Website">Slow Website</option>
+                    </select>
+                    <button type="submit" class="btn-filter">Filter</button>
+                    <button type="button" class="btn-filter-clear" onclick="clearFilters()">Clear</button>
+                </div>
+            </form>
+        </section>
+
+        <!-- Leads Table -->
+        <section class="card table-section">
+            <div class="table-header">
+                <h2 class="section-title">Leads</h2>
+                <div id="table-spinner" class="spinner"></div>
+            </div>
+            <div class="table-responsive">
+                <table class="leads-table" id="leads-table">
+                    <thead>
+                        <tr>
+                            <th>Business</th>
+                            <th>Category</th>
+                            <th>City</th>
+                            <th>Phone</th>
+                            <th>Rating</th>
+                            <th>Reviews</th>
+                            <th>Website</th>
+                            <th>SSL</th>
+                            <th>Tags</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leads-tbody" hx-get="/lead-rows" hx-trigger="load" hx-swap="innerHTML"
+                        hx-indicator="#table-spinner">
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <!-- Result Modal -->
+    <div class="modal-overlay" id="result-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modal-title">Result</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modal-body">
+                <pre id="modal-pre"></pre>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Stats rendering via HTMX (intercept JSON and render)
+        document.body.addEventListener('htmx:beforeSwap', function (evt) {
+            if (evt.detail.target.id === 'stats-row') {
+                try {
+                    const data = JSON.parse(evt.detail.xhr.responseText);
+                    evt.detail.serverResponse = `
+                        <div class="stat-card">
+                            <span class="stat-value">${data.total_leads}</span>
+                            <span class="stat-label">Total Leads</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-value">${data.with_website}</span>
+                            <span class="stat-label">With Website</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-value">${data.with_email}</span>
+                            <span class="stat-label">With Email</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-value">${data.avg_rating > 0 ? data.avg_rating.toFixed(1) : '—'}</span>
+                            <span class="stat-label">Avg Rating</span>
+                        </div>
+                        <div class="stat-card stat-card-warn">
+                            <span class="stat-value">${data.flagged_count}</span>
+                            <span class="stat-label">⚠ Flagged</span>
+                        </div>
+                    `;
+                } catch (e) {
+                    console.error('Stats parse error:', e);
+                }
+            }
+        });
+
+        function clearFilters() {
+            document.getElementById('filter-search').value = '';
+            document.getElementById('filter-city').value = '';
+            document.getElementById('filter-category').value = '';
+            document.getElementById('filter-tag').value = '';
+            htmx.ajax('GET', '/lead-rows', { target: '#leads-tbody', swap: 'innerHTML' });
+        }
+
+        // On-demand enrichment actions
+        async function runAction(action, placeId, btn) {
+            const originalText = btn.textContent;
+            btn.textContent = '⏳';
+            btn.disabled = true;
+
+            const titles = {
+                techstack: '🔧 Tech Stack',
+                pagespeed: '⚡ PageSpeed Results',
+                screenshot: '📸 Screenshot',
+                contacts: '👤 Contacts Found',
+                pitch: '✉️ AI Pitch Prompt'
+            };
+
+            try {
+                const resp = await fetch(`/api/enrich/${action}?place_id=${encodeURIComponent(placeId)}`, {
+                    method: 'POST'
+                });
+                const data = await resp.json();
+
+                if (data.error) {
+                    showModal(titles[action] || 'Error', `<div class="modal-error">${data.error}</div>`);
+                } else if (action === 'screenshot') {
+                    showModal(titles[action], `<img src="${data.url}" class="screenshot-img" alt="Website screenshot" />`);
+                } else if (action === 'pitch') {
+                    showModal(titles[action], `<div class="pitch-prompt">${data.prompt.replace(/\n/g, '<br>')}</div>
+                        <button class="btn-copy" onclick="copyToClipboard(this)" data-text="${encodeURIComponent(data.prompt)}">📋 Copy Prompt</button>`);
+                } else if (action === 'contacts') {
+                    let html = '<div class="contact-results">';
+                    if (data.emails && data.emails.length) html += `<div class="contact-section"><strong>📧 Emails:</strong><ul>${data.emails.map(e => `<li>${e}</li>`).join('')}</ul></div>`;
+                    if (data.phones && data.phones.length) html += `<div class="contact-section"><strong>📞 Phones:</strong><ul>${data.phones.map(p => `<li>${p}</li>`).join('')}</ul></div>`;
+                    if (data.linkedin_urls && data.linkedin_urls.length) html += `<div class="contact-section"><strong>💼 LinkedIn:</strong><ul>${data.linkedin_urls.map(l => `<li><a href="${l}" target="_blank">${l}</a></li>`).join('')}</ul></div>`;
+                    html += '</div>';
+                    showModal(titles[action], html);
+                } else {
+                    showModal(titles[action], `<pre class="result-json">${JSON.stringify(data, null, 2)}</pre>`);
+                }
+            } catch (err) {
+                showModal('Error', `<div class="modal-error">${err.message}</div>`);
+            }
+
+            btn.textContent = originalText;
+            btn.disabled = false;
+        }
+
+        function showModal(title, bodyHTML) {
+            document.getElementById('modal-title').textContent = title;
+            document.getElementById('modal-body').innerHTML = bodyHTML;
+            document.getElementById('result-modal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('result-modal').classList.remove('active');
+        }
+
+        function copyToClipboard(btn) {
+            const text = decodeURIComponent(btn.dataset.text);
+            navigator.clipboard.writeText(text).then(() => {
+                btn.textContent = '✅ Copied!';
+                setTimeout(() => btn.textContent = '📋 Copy Prompt', 2000);
+            });
+        }
+
+        // Close modal on backdrop click
+        document.getElementById('result-modal').addEventListener('click', function (e) {
+            if (e.target === this) closeModal();
+        });
+
+        // Close modal on Escape
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') closeModal();
+        });
+    </script>
+</body>
+
+</html>

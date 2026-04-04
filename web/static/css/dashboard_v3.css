@@ -310,23 +310,25 @@ textarea {
     width: 100%;
 }
 
+.map-actions-wrapper {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    gap: 1rem;
+    background: #f8fafc;
+    border-top: 1px solid var(--border-color);
+}
+
 .map-controls {
-    position: absolute;
-    bottom: 10px;
-    right: 10px;
-    z-index: 1000;
     display: flex;
     gap: 0.5rem;
 }
 
 .map-search-container {
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    right: 10px;
-    z-index: 1000;
     display: flex;
     gap: 0.5rem;
+    flex: 1;
 }
 
 .map-search-input {

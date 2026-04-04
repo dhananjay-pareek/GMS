@@ -63,3 +63,34 @@ services:
 #     
 #     # Initial SQL to run
 #     # postgresMajorVersion: 15
+
+  # Web Service - Agency Leads Manager CRM
+  - type: web
+    name: agency-leads-manager
+    runtime: docker
+    repo: https://github.com/gosom/GMAP-Scrapper
+    branch: main
+    dockerfilePath: ./Dockerfile.leadsmanager
+    
+    healthCheckPath: /health
+    autoDeploy: true
+    
+    # Resource allocation
+    plan: starter
+    
+    envVars:
+      # Render dynamically sets PORT=9090 based on Dockerfile
+      # IMPORTANT: You must add these manually via the Render dashboard
+      - key: SUPABASE_DB_URL
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      
+    buildFilter:
+      paths:
+        - "cmd/leadsmanager/**"
+        - "internal/**"
+        - "web_leadsmanager/**"
+        - "Dockerfile.leadsmanager"
+        - "go.mod"
+        - "go.sum"
