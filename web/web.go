@@ -69,6 +69,7 @@ func New(svc *Service, addr string) (*Server, error) {
 	mux.HandleFunc("/", ans.index)
 
 	// api routes
+	mux.HandleFunc("/api/generate-keywords", ans.apiGenerateKeywords)
 	mux.HandleFunc("/api/docs", ans.redocHandler)
 	mux.HandleFunc("/api/v1/jobs", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -661,8 +662,364 @@ func securityHeaders(next http.Handler) http.Handler {
 				"style-src 'self' 'unsafe-inline' fonts.googleapis.com unpkg.com; "+
 				"img-src 'self' data: cdn.redoc.ly *.tile.openstreetmap.org unpkg.com; "+
 				"font-src 'self' fonts.gstatic.com; "+
-				"connect-src 'self' nominatim.openstreetmap.org unpkg.com")
+				"connect-src 'self' nominatim.openstreetmap.org unpkg.com generativelanguage.googleapis.com api.openai.com api.anthropic.com api.cohere.ai api.mistral.ai api.groq.com api.together.xyz api.replicate.com api-inference.huggingface.co api.perplexity.ai")
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+// ─── AI Keyword Generation ───────────────────────────────────────────────────
+
+type generateKeywordsRequest struct {
+	Provider string `json:"provider"`
+	APIKey   string `json:"api_key"`
+	Model    string `json:"model"`
+	JobName  string `json:"job_name"`
+	Location string `json:"location"`
+}
+
+type generateKeywordsResponse struct {
+	Keywords []string `json:"keywords,omitempty"`
+	Error    string   `json:"error,omitempty"`
+}
+
+func (s *Server) apiGenerateKeywords(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		renderJSON(w, http.StatusMethodNotAllowed, apiError{Code: 405, Message: "Method not allowed"})
+		return
+	}
+
+	var req generateKeywordsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		renderJSON(w, http.StatusBadRequest, generateKeywordsResponse{Error: "Invalid request body"})
+		return
+	}
+
+	if req.APIKey == "" {
+		renderJSON(w, http.StatusBadRequest, generateKeywordsResponse{Error: "API key is required"})
+		return
+	}
+
+	if req.JobName == "" && req.Location == "" {
+		renderJSON(w, http.StatusBadRequest, generateKeywordsResponse{Error: "Job name or location is required"})
+		return
+	}
+
+	prompt := buildKeywordPrompt(req.JobName, req.Location)
+
+	result, err := callLLM(req.Provider, req.APIKey, req.Model, prompt)
+	if err != nil {
+		log.Printf("LLM call failed: %v", err)
+		renderJSON(w, http.StatusInternalServerError, generateKeywordsResponse{Error: err.Error()})
+		return
+	}
+
+	keywords := parseKeywords(result)
+	renderJSON(w, http.StatusOK, generateKeywordsResponse{Keywords: keywords})
+}
+
+func buildKeywordPrompt(jobName, location string) string {
+	var sb strings.Builder
+	sb.WriteString("Generate 10-15 highly specific Google Maps search keywords for scraping business leads.\n")
+	sb.WriteString("Each keyword should be a realistic search query someone would type into Google Maps.\n")
+	if jobName != "" {
+		sb.WriteString(fmt.Sprintf("Business type / niche: %s\n", jobName))
+	}
+	if location != "" {
+		sb.WriteString(fmt.Sprintf("Target location: %s\n", location))
+	}
+	sb.WriteString("\nRules:\n")
+	sb.WriteString("- One keyword per line\n")
+	sb.WriteString("- Include location in each keyword\n")
+	sb.WriteString("- Mix broad and niche terms\n")
+	sb.WriteString("- Include related business types and services\n")
+	sb.WriteString("- No numbering, no bullets, no explanations — ONLY the search queries, one per line\n")
+	return sb.String()
+}
+
+func parseKeywords(raw string) []string {
+	lines := strings.Split(raw, "\n")
+	var keywords []string
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		// Strip leading numbering like "1. " or "- "
+		if len(line) > 2 && (line[0] >= '0' && line[0] <= '9') {
+			if idx := strings.IndexAny(line, ".)- "); idx > 0 && idx < 4 {
+				line = strings.TrimSpace(line[idx+1:])
+			}
+		}
+		line = strings.TrimPrefix(line, "- ")
+		line = strings.TrimPrefix(line, "* ")
+		line = strings.TrimSpace(line)
+		if line != "" {
+			keywords = append(keywords, line)
+		}
+	}
+	return keywords
+}
+
+func callLLM(provider, apiKey, model, prompt string) (string, error) {
+	switch provider {
+	case "gemini":
+		return callGemini(apiKey, model, prompt)
+	case "openai":
+		return callOpenAICompatible("https://api.openai.com/v1/chat/completions", apiKey, model, prompt, "gpt-4o-mini")
+	case "anthropic":
+		return callAnthropic(apiKey, model, prompt)
+	case "groq":
+		return callOpenAICompatible("https://api.groq.com/openai/v1/chat/completions", apiKey, model, prompt, "llama-3.1-8b-instant")
+	case "together":
+		return callOpenAICompatible("https://api.together.xyz/v1/chat/completions", apiKey, model, prompt, "meta-llama/Llama-3-8b-chat-hf")
+	case "mistral":
+		return callOpenAICompatible("https://api.mistral.ai/v1/chat/completions", apiKey, model, prompt, "mistral-small-latest")
+	case "perplexity":
+		return callOpenAICompatible("https://api.perplexity.ai/chat/completions", apiKey, model, prompt, "llama-3.1-sonar-small-128k-online")
+	case "cohere":
+		return callCohere(apiKey, model, prompt)
+	case "ollama":
+		host := apiKey // for Ollama, "api_key" field holds the host URL
+		if model == "" {
+			model = "llama3"
+		}
+		return callOllama(host, model, prompt)
+	default:
+		return "", fmt.Errorf("unsupported provider: %s", provider)
+	}
+}
+
+// ─── Gemini ──────────────────────────────────────────────────────────────────
+
+func callGemini(apiKey, model, prompt string) (string, error) {
+	if model == "" {
+		model = "gemini-2.0-flash"
+	}
+	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", model, apiKey)
+
+	body := map[string]any{
+		"contents": []map[string]any{
+			{"parts": []map[string]string{{"text": prompt}}},
+		},
+	}
+
+	respBody, err := doJSON(http.MethodPost, url, body, nil)
+	if err != nil {
+		return "", err
+	}
+
+	// Parse Gemini response
+	var result struct {
+		Candidates []struct {
+			Content struct {
+				Parts []struct {
+					Text string `json:"text"`
+				} `json:"parts"`
+			} `json:"content"`
+		} `json:"candidates"`
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return "", fmt.Errorf("failed to parse Gemini response: %w", err)
+	}
+	if result.Error != nil {
+		return "", fmt.Errorf("Gemini API error: %s", result.Error.Message)
+	}
+	if len(result.Candidates) == 0 || len(result.Candidates[0].Content.Parts) == 0 {
+		return "", fmt.Errorf("empty response from Gemini")
+	}
+	return result.Candidates[0].Content.Parts[0].Text, nil
+}
+
+// ─── OpenAI-compatible (OpenAI, Groq, Together, Mistral, Perplexity) ────────
+
+func callOpenAICompatible(baseURL, apiKey, model, prompt, defaultModel string) (string, error) {
+	if model == "" {
+		model = defaultModel
+	}
+
+	body := map[string]any{
+		"model": model,
+		"messages": []map[string]string{
+			{"role": "user", "content": prompt},
+		},
+		"max_tokens": 1024,
+	}
+
+	headers := map[string]string{
+		"Authorization": "Bearer " + apiKey,
+	}
+
+	respBody, err := doJSON(http.MethodPost, baseURL, body, headers)
+	if err != nil {
+		return "", err
+	}
+
+	var result struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return "", fmt.Errorf("failed to parse response: %w", err)
+	}
+	if result.Error != nil {
+		return "", fmt.Errorf("API error: %s", result.Error.Message)
+	}
+	if len(result.Choices) == 0 {
+		return "", fmt.Errorf("empty response")
+	}
+	return result.Choices[0].Message.Content, nil
+}
+
+// ─── Anthropic ───────────────────────────────────────────────────────────────
+
+func callAnthropic(apiKey, model, prompt string) (string, error) {
+	if model == "" {
+		model = "claude-3-5-haiku-latest"
+	}
+
+	body := map[string]any{
+		"model":      model,
+		"max_tokens": 1024,
+		"messages": []map[string]string{
+			{"role": "user", "content": prompt},
+		},
+	}
+
+	headers := map[string]string{
+		"x-api-key":         apiKey,
+		"anthropic-version": "2023-06-01",
+	}
+
+	respBody, err := doJSON(http.MethodPost, "https://api.anthropic.com/v1/messages", body, headers)
+	if err != nil {
+		return "", err
+	}
+
+	var result struct {
+		Content []struct {
+			Text string `json:"text"`
+		} `json:"content"`
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return "", fmt.Errorf("failed to parse Anthropic response: %w", err)
+	}
+	if result.Error != nil {
+		return "", fmt.Errorf("Anthropic error: %s", result.Error.Message)
+	}
+	if len(result.Content) == 0 {
+		return "", fmt.Errorf("empty Anthropic response")
+	}
+	return result.Content[0].Text, nil
+}
+
+// ─── Cohere ──────────────────────────────────────────────────────────────────
+
+func callCohere(apiKey, model, prompt string) (string, error) {
+	if model == "" {
+		model = "command-r"
+	}
+
+	body := map[string]any{
+		"model":   model,
+		"message": prompt,
+	}
+
+	headers := map[string]string{
+		"Authorization": "Bearer " + apiKey,
+	}
+
+	respBody, err := doJSON(http.MethodPost, "https://api.cohere.ai/v1/chat", body, headers)
+	if err != nil {
+		return "", err
+	}
+
+	var result struct {
+		Text    string `json:"text"`
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return "", fmt.Errorf("failed to parse Cohere response: %w", err)
+	}
+	if result.Text == "" && result.Message != "" {
+		return "", fmt.Errorf("Cohere error: %s", result.Message)
+	}
+	return result.Text, nil
+}
+
+// ─── Ollama (local) ──────────────────────────────────────────────────────────
+
+func callOllama(host, model, prompt string) (string, error) {
+	if !strings.HasPrefix(host, "http") {
+		host = "http://" + host
+	}
+	host = strings.TrimRight(host, "/")
+
+	body := map[string]any{
+		"model":  model,
+		"prompt": prompt,
+		"stream": false,
+	}
+
+	respBody, err := doJSON(http.MethodPost, host+"/api/generate", body, nil)
+	if err != nil {
+		return "", err
+	}
+
+	var result struct {
+		Response string `json:"response"`
+		Error    string `json:"error"`
+	}
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return "", fmt.Errorf("failed to parse Ollama response: %w", err)
+	}
+	if result.Error != "" {
+		return "", fmt.Errorf("Ollama error: %s", result.Error)
+	}
+	return result.Response, nil
+}
+
+// ─── HTTP helper ─────────────────────────────────────────────────────────────
+
+func doJSON(method, url string, body any, headers map[string]string) ([]byte, error) {
+	payload, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(method, url, strings.NewReader(string(payload)))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+
+	client := &http.Client{Timeout: 60 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("API returned %d: %s", resp.StatusCode, string(respBytes))
+	}
+
+	return respBytes, nil
 }

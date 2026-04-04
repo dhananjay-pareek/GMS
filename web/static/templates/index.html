@@ -47,8 +47,10 @@
                                     placeholder="e.g., Restaurants NYC" />
                             </div>
                             <div class="form-group">
-                                <div class="label-wrapper">
+                                <div class="label-wrapper" style="justify-content: space-between; width: 100%;">
                                     <label for="keywords">Keywords <span class="required">*</span></label>
+                                    <button type="button" class="btn-ai" onclick="openAIModal()">✨ Generate with
+                                        AI</button>
                                 </div>
                                 <textarea id="keywords" name="keywords" rows="5"
                                     placeholder="restaurants in New York&#10;coffee shops in Manhattan&#10;(one search per line)">{{.KeywordsString}}</textarea>
@@ -153,8 +155,7 @@
                             <div class="form-group">
                                 <label for="google_sheet_id">Google Sheet ID</label>
                                 <input type="text" id="google_sheet_id" name="google_sheet_id"
-                                    value="{{.GoogleSheetID}}"
-                                    placeholder="e.g., 1wlVN...ThWc (from your Sheet URL)" />
+                                    value="{{.GoogleSheetID}}" placeholder="e.g., 1wlVN...ThWc (from your Sheet URL)" />
                                 <small style="color: var(--text-secondary); font-size: 0.75rem;">
                                     From: docs.google.com/spreadsheets/d/<strong>THIS_PART</strong>/edit
                                 </small>
@@ -298,6 +299,155 @@
         </div>
     </div>
 
+    <!-- AI Generation Modal -->
+    <div class="modal-overlay" id="ai-modal">
+        <div class="modal-content" style="max-width: 450px;">
+            <div class="modal-header">
+                <h3 class="modal-title">✨ Generate Keywords with AI</h3>
+                <button type="button" class="modal-close" onclick="closeAIModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <p class="info-desc" style="margin-bottom: 1.5rem;">Generate targeted Google Maps search queries based
+                    on your job title and map location.</p>
+
+                <div class="ai-form-group">
+                    <label>Provider</label>
+                    <select id="ai-provider">
+                        <option value="gemini">Gemini (Google)</option>
+                        <option value="openai">OpenAI (GPT-4o)</option>
+                        <option value="anthropic">Anthropic (Claude)</option>
+                        <option value="cohere">Cohere</option>
+                        <option value="mistral">Mistral</option>
+                        <option value="groq">Groq</option>
+                        <option value="together">Together AI</option>
+                        <option value="replicate">Replicate</option>
+                        <option value="huggingface">HuggingFace</option>
+                        <option value="perplexity">Perplexity</option>
+                        <option value="ollama">Ollama (Local URL)</option>
+                    </select>
+                </div>
+
+                <div class="ai-form-group">
+                    <label>API Key (or Host URL for Ollama)</label>
+                    <input type="password" id="ai-apikey" placeholder="Enter API Key">
+                    <div class="ai-hint">Keys are only used for this execution and not saved.</div>
+                </div>
+
+                <div class="ai-form-group">
+                    <label>Model (Optional)</label>
+                    <input type="text" id="ai-model" placeholder="Leave blank for default">
+                </div>
+
+                <div id="ai-error" class="ai-error"></div>
+
+                <div class="ai-modal-actions">
+                    <button type="button" class="btn-cancel" onclick="closeAIModal()">Cancel</button>
+                    <button type="button" class="btn-generate" id="btn-generate-ai"
+                        onclick="generateAIKeywords()">Generate</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // AI Modal logic
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedProvider = sessionStorage.getItem('ai_provider');
+            if (savedProvider) document.getElementById('ai-provider').value = savedProvider;
+
+            const savedKey = sessionStorage.getItem('ai_apikey');
+            if (savedKey) document.getElementById('ai-apikey').value = savedKey;
+        });
+
+        function openAIModal() {
+            document.getElementById('ai-modal').classList.add('active');
+            document.getElementById('ai-error').style.display = 'none';
+        }
+
+        function closeAIModal() {
+            document.getElementById('ai-modal').classList.remove('active');
+        }
+
+        async function generateAIKeywords() {
+            const provider = document.getElementById('ai-provider').value;
+            const apiKey = document.getElementById('ai-apikey').value.trim();
+            const model = document.getElementById('ai-model').value.trim();
+            const jobName = document.getElementById('name').value.trim();
+            const searchPlaceInput = document.getElementById('place-search-input').value.trim();
+
+            const errDiv = document.getElementById('ai-error');
+
+            if (!apiKey) {
+                errDiv.textContent = "API Key is required.";
+                errDiv.style.display = 'block';
+                return;
+            }
+
+            if (!jobName && !searchPlaceInput) {
+                errDiv.textContent = "Please enter a Job Name or search a location first so the AI knows what to generate for.";
+                errDiv.style.display = 'block';
+                return;
+            }
+
+            sessionStorage.setItem('ai_provider', provider);
+            sessionStorage.setItem('ai_apikey', apiKey);
+
+            const btn = document.getElementById('btn-generate-ai');
+            const originalText = btn.textContent;
+            btn.textContent = 'Generating...';
+            btn.disabled = true;
+            errDiv.style.display = 'none';
+
+            try {
+                const response = await fetch('/api/generate-keywords', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        provider: provider,
+                        api_key: apiKey,
+                        model: model,
+                        job_name: jobName,
+                        location: searchPlaceInput
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok || data.error) {
+                    throw new Error(data.error || `HTTP error ${response.status}`);
+                }
+
+                if (data.keywords && data.keywords.length > 0) {
+                    const kwTextarea = document.getElementById('keywords');
+                    let current = kwTextarea.value.trim();
+                    if (current) {
+                        current += '\n' + data.keywords.join('\n');
+                    } else {
+                        current = data.keywords.join('\n');
+                    }
+                    kwTextarea.value = current;
+                    closeAIModal();
+                } else {
+                    throw new Error("No keywords were generated.");
+                }
+            } catch (err) {
+                errDiv.textContent = err.message;
+                errDiv.style.display = 'block';
+            } finally {
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        document.getElementById('ai-modal').addEventListener('click', function (e) {
+            if (e.target === this) closeAIModal();
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && document.getElementById('ai-modal').classList.contains('active')) {
+                closeAIModal();
+            }
+        });
+    </script>
     <script>
         (function () {
             'use strict';
