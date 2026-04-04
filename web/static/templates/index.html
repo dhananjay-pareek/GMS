@@ -152,14 +152,6 @@
                                     placeholder="10m or 2h" />
                                 <span class="validation-error" id="maxtime-error"></span>
                             </div>
-                            <div class="form-group">
-                                <label for="google_sheet_id">Google Sheet ID</label>
-                                <input type="text" id="google_sheet_id" name="google_sheet_id"
-                                    value="{{.GoogleSheetID}}" placeholder="e.g., 1wlVN...ThWc (from your Sheet URL)" />
-                                <small style="color: var(--text-secondary); font-size: 0.75rem;">
-                                    From: docs.google.com/spreadsheets/d/<strong>THIS_PART</strong>/edit
-                                </small>
-                            </div>
                         </div>
                     </details>
 
@@ -182,7 +174,7 @@
                     </details>
                 </div>
 
-                <button type="submit" class="btn-primary" id="start-scraping-btn">
+                <button type="submit" class="btn-primary" id="start-scraping-btn" hx-disabled-elt="this">
                     <span>🚀</span> Start Scraping
                 </button>
             </form>

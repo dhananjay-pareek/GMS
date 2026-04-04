@@ -410,8 +410,15 @@ func (w *webrunner) setupMate(_ context.Context, wCsv *csv.Writer, job *web.Job)
 		writers = append(writers, webhookwriter.New(w.cfg.WebhookURL))
 	}
 
+	var finalWriters []scrapemate.ResultWriter
+	if len(writers) > 1 {
+		finalWriters = []scrapemate.ResultWriter{newMultiWriter(writers...)}
+	} else {
+		finalWriters = writers
+	}
+
 	matecfg, err := scrapemateapp.NewConfig(
-		writers,
+		finalWriters,
 		opts...,
 	)
 	if err != nil {
