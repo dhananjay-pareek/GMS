@@ -255,33 +255,39 @@
                 </div>
                 <div class="info-item">
                     <span class="info-name">Fast Mode (BETA)</span>
-                    <span class="info-desc">Speeds up scraping by using a different grid-based coordinate technique.
-                        Requires Latitude and Longitude to be set.</span>
+                    <span class="info-desc">Speeds up scraping by using a grid-coordinate technique instead of mimicking
+                        user scrolling. Requires exact Latitude and Longitude.<br><strong>Suggestion:</strong> Leave ON
+                        for faster execution. Provide coordinate targets.</span>
                 </div>
                 <div class="info-item">
                     <span class="info-name">Radius</span>
-                    <span class="info-desc">The search radius in meters around the central coordinate point (e.g., 5000
-                        for 5km).</span>
+                    <span class="info-desc">The search radius in meters around the central coordinate point (e.g. 5000
+                        for 5km).<br><strong>Criteria:</strong> Numbers only, 0 to disable.<br><strong>Suggested
+                            Value:</strong> 5000 to 10000.</span>
                 </div>
                 <div class="info-item">
                     <span class="info-name">Depth</span>
                     <span class="info-desc">How far deep to scrape the results (number of scrolls or pages). Higher
-                        means more results but slower execution.</span>
+                        means more results but slower execution.<br><strong>Criteria:</strong> Integer >
+                        0.<br><strong>Suggested Value:</strong> 120 (for a thorough deep scrape).</span>
                 </div>
                 <div class="info-item">
                     <span class="info-name">Fetch Emails</span>
-                    <span class="info-desc">When enabled, the scraper will visit business websites to attempt to extract
-                        email addresses and social links.</span>
+                    <span class="info-desc">When enabled, the scraper visits business websites to attempt to extract
+                        email addresses and social links.<br><strong>Suggestion:</strong> Turn ON if outreach metrics
+                        are critical.</span>
                 </div>
                 <div class="info-item">
                     <span class="info-name">Max Job Time</span>
-                    <span class="info-desc">The maximum allowed running time before the job forcefully stops (e.g.,
-                        "10m" for 10 minutes, "2h" for 2 hours).</span>
+                    <span class="info-desc">The maximum allowed running time before the job forcefully stops safely.
+                        Very important to prevent stuck jobs.<br><strong>Criteria:</strong> Time format like Xm or Xh
+                        (e.g., 30m, 2h).<br><strong>Suggested Value:</strong> 1h or 2h.</span>
                 </div>
                 <div class="info-item">
                     <span class="info-name">Proxies</span>
-                    <span class="info-desc">A list of HTTP proxies to use for the scraping job, one per line. Helpful to
-                        avoid rate limiting blocks.</span>
+                    <span class="info-desc">A list of HTTP proxies to use, one per line (IP:PORT or user:pass@IP:PORT).
+                        Helpful to avoid Google rate limit blocks.<br><strong>Suggestion:</strong> Use a proxy rotation
+                        pool if scraping large cities.</span>
                 </div>
                 <div class="info-item">
                     <span class="info-name">Start Scraping</span>

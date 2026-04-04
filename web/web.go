@@ -720,7 +720,7 @@ func (s *Server) apiGenerateKeywords(w http.ResponseWriter, r *http.Request) {
 
 func buildKeywordPrompt(jobName, location string) string {
 	var sb strings.Builder
-	sb.WriteString("Generate 10-15 highly specific and broad Google Maps search keywords for scraping business leads.\n")
+	sb.WriteString("Generate 15-20 highly specific and broad Google Maps search keywords for scraping business leads.\n")
 	sb.WriteString("Each keyword should be a realistic search query someone would type into Google Maps.\n")
 
 	if jobName != "" {

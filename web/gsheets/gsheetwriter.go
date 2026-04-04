@@ -144,8 +144,13 @@ func (w *gsWriter) Run(ctx context.Context, in <-chan scrapemate.Result) error {
 }
 
 func (w *gsWriter) processResult(result scrapemate.Result) {
-	entry, ok := result.Data.(*gmaps.Entry)
-	if !ok {
+	var entry *gmaps.Entry
+	switch v := result.Data.(type) {
+	case *gmaps.Entry:
+		entry = v
+	case gmaps.Entry:
+		entry = &v
+	default:
 		return
 	}
 

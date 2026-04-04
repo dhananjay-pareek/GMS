@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -46,9 +45,15 @@ func (w *webhookWriter) Run(ctx context.Context, in <-chan scrapemate.Result) er
 	lastSave := time.Now().UTC()
 
 	for result := range in {
-		entry, ok := result.Data.(*gmaps.Entry)
-		if !ok {
-			return errors.New("invalid data type for webhook writer")
+		var entry *gmaps.Entry
+		switch v := result.Data.(type) {
+		case *gmaps.Entry:
+			entry = v
+		case gmaps.Entry:
+			entry = &v
+		default:
+			// Not a gmaps.Entry, skip
+			continue
 		}
 
 		buff = append(buff, entry)
