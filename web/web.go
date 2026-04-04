@@ -720,20 +720,23 @@ func (s *Server) apiGenerateKeywords(w http.ResponseWriter, r *http.Request) {
 
 func buildKeywordPrompt(jobName, location string) string {
 	var sb strings.Builder
-	sb.WriteString("Generate 10-15 highly specific Google Maps search keywords for scraping business leads.\n")
+	sb.WriteString("Generate 10-15 highly specific and broad Google Maps search keywords for scraping business leads.\n")
 	sb.WriteString("Each keyword should be a realistic search query someone would type into Google Maps.\n")
+
 	if jobName != "" {
-		sb.WriteString(fmt.Sprintf("Business type / niche: %s\n", jobName))
+		sb.WriteString(fmt.Sprintf("Business type / niche given by user: %s\n", jobName))
+		sb.WriteString("Crucial Instruction: THINK BROADLY. Do not just repeat the exact niche. Include synonyms, related sub-industries, suppliers, manufacturers, distributors, and specific material/service variations. For example, if the niche is 'stone sellers', you MUST include terms like 'marble suppliers', 'granite fabricators', 'quartz countertops', 'masonry supply', 'landscaping rock yard', etc.\n")
 	}
 	if location != "" {
 		sb.WriteString(fmt.Sprintf("Target location: %s\n", location))
 	}
+
 	sb.WriteString("\nRules:\n")
 	sb.WriteString("- One keyword per line\n")
-	sb.WriteString("- Include location in each keyword\n")
-	sb.WriteString("- Mix broad and niche terms\n")
-	sb.WriteString("- Include related business types and services\n")
-	sb.WriteString("- No numbering, no bullets, no explanations — ONLY the search queries, one per line\n")
+	sb.WriteString("- Include location in each keyword (or a variation of it)\n")
+	sb.WriteString("- Mix broad category terms and highly specific niche terms\n")
+	sb.WriteString("- Include related business types, materials, and services\n")
+	sb.WriteString("- No numbering, no bullets, no explanations — ONLY the raw search queries, one per line\n")
 	return sb.String()
 }
 
