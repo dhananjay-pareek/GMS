@@ -310,6 +310,7 @@ func (m *Manager) HandlePitchPrompt(w http.ResponseWriter, r *http.Request) {
 
 	placeID := r.URL.Query().Get("place_id")
 	persona := r.URL.Query().Get("persona")
+	apiKey := r.URL.Query().Get("api_key")
 	if placeID == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing place_id"})
 		return
@@ -318,7 +319,7 @@ func (m *Manager) HandlePitchPrompt(w http.ResponseWriter, r *http.Request) {
 		persona = "marketing consultant"
 	}
 
-	prompt, err := m.enricher.GeneratePitchPrompt(r.Context(), placeID, persona)
+	prompt, err := m.enricher.GeneratePitchPrompt(r.Context(), placeID, persona, apiKey)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return

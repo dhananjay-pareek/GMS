@@ -14,6 +14,8 @@
         <div class="top-bar-inner">
             <h1 class="logo">Rankernet's <span>LeadsPilot</span></h1>
             <nav class="top-nav">
+                <input type="password" id="gemini-api-key" placeholder="Enter Gemini API Key (Optional)"
+                    style="padding: 0.5rem; border-radius: 4px; border: 1px solid #ddd; font-size: 0.85rem; width: 250px; margin-right: 1rem;">
                 <a href="/" class="nav-link active">Dashboard</a>
             </nav>
         </div>
@@ -154,11 +156,19 @@
                 pagespeed: '⚡ PageSpeed Results',
                 screenshot: '📸 Screenshot',
                 contacts: '👤 Contacts Found',
-                pitch: '✉️ AI Pitch Prompt'
+                pitch: '✉️ AI Pitch'
             };
 
             try {
-                const resp = await fetch(`/api/enrich/${action}?place_id=${encodeURIComponent(placeId)}`, {
+                let url = `/api/enrich/${action}?place_id=${encodeURIComponent(placeId)}`;
+                if (action === 'pitch') {
+                    const apiKey = document.getElementById('gemini-api-key').value;
+                    if (apiKey) {
+                        url += `&api_key=${encodeURIComponent(apiKey)}`;
+                    }
+                }
+
+                const resp = await fetch(url, {
                     method: 'POST'
                 });
                 const data = await resp.json();

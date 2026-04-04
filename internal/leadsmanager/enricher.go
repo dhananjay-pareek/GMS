@@ -1,6 +1,7 @@
 package leadsmanager
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -372,7 +373,7 @@ type GeneratePitchRequest struct {
 }
 
 // GeneratePitchPrompt builds a pitch prompt from lead data (client-side API call).
-func (e *Enricher) GeneratePitchPrompt(ctx context.Context, placeID, persona string) (string, error) {
+func (e *Enricher) GeneratePitchPrompt(ctx context.Context, placeID, persona, apiKey string) (string, error) {
 	lead, err := e.db.GetLead(ctx, placeID)
 	if err != nil {
 		return "", err
@@ -437,5 +438,61 @@ Instructions:
 		strings.Join(issues, "\n- "),
 	)
 
-	return prompt, nil
+	if apiKey == "" {
+		return prompt, nil
+	}
+
+	return e.callGemini(ctx, prompt, apiKey)
+}
+
+func (e *Enricher) callGemini(ctx context.Context, prompt, apiKey string) (string, error) {
+	url := "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + apiKey
+
+	payload := map[string]any{
+		"contents": []map[string]any{
+			{
+				"parts": []map[string]any{
+					{"text": prompt},
+				},
+			},
+		},
+	}
+
+	bodyBytes, _ := json.Marshal(payload)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := e.httpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyStr, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("gemini api error: %d - %s", resp.StatusCode, string(bodyStr))
+	}
+
+	var result struct {
+		Candidates []struct {
+			Content struct {
+				Parts []struct {
+					Text string `json:"text"`
+				} `json:"parts"`
+			} `json:"content"`
+		} `json:"candidates"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
+
+	if len(result.Candidates) > 0 && len(result.Candidates[0].Content.Parts) > 0 {
+		return result.Candidates[0].Content.Parts[0].Text, nil
+	}
+
+	return "", fmt.Errorf("no content returned from gemini")
 }
