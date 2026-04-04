@@ -71,6 +71,8 @@ func ParseSearchResults(raw []byte) ([]*Entry, error) {
 		entry.Status = getNthElementAndCast[string](business, 34, 4, 4)
 		entry.Timezone = getNthElementAndCast[string](business, 30)
 		entry.DataID = getNthElementAndCast[string](business, 10)
+		entry.PlaceID = getNthElementAndCast[string](business, 78)
+		entry.Link = getNthElementAndCast[string](business, 27)
 
 		entry.PlusCode = olc.Encode(entry.Latitude, entry.Longtitude, 10)
 

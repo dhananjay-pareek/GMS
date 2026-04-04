@@ -144,23 +144,39 @@ func (w *gsWriter) Run(ctx context.Context, in <-chan scrapemate.Result) error {
 }
 
 func (w *gsWriter) processResult(result scrapemate.Result) {
-	var entry *gmaps.Entry
-	switch v := result.Data.(type) {
+	w.processData(result.Data)
+}
+
+func (w *gsWriter) processData(data any) {
+	switch v := data.(type) {
 	case *gmaps.Entry:
-		entry = v
+		w.appendEntry(v)
 	case gmaps.Entry:
-		entry = &v
-	default:
+		w.appendEntry(&v)
+	case []*gmaps.Entry:
+		for _, e := range v {
+			w.appendEntry(e)
+		}
+	case []gmaps.Entry:
+		for i := range v {
+			w.appendEntry(&v[i])
+		}
+	case []any:
+		for _, item := range v {
+			w.processData(item)
+		}
+	}
+}
+
+func (w *gsWriter) appendEntry(entry *gmaps.Entry) {
+	if entry == nil {
 		return
 	}
-
 	csvRow := entry.CsvRow()
-
 	row := make([]interface{}, 0, len(csvRow)+1)
 	for _, cell := range csvRow {
 		row = append(row, cell)
 	}
-
 	row = append(row, "ok") // Scrape_Status
 
 	w.mu.Lock()

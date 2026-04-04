@@ -44,19 +44,35 @@ func (w *webhookWriter) Run(ctx context.Context, in <-chan scrapemate.Result) er
 	buff := make([]*gmaps.Entry, 0, maxBatchSize)
 	lastSave := time.Now().UTC()
 
-	for result := range in {
-		var entry *gmaps.Entry
-		switch v := result.Data.(type) {
+	var processData func(any)
+	processData = func(data any) {
+		switch v := data.(type) {
 		case *gmaps.Entry:
-			entry = v
+			if v != nil {
+				buff = append(buff, v)
+			}
 		case gmaps.Entry:
-			entry = &v
-		default:
-			// Not a gmaps.Entry, skip
-			continue
+			buff = append(buff, &v)
+		case []*gmaps.Entry:
+			for _, e := range v {
+				if e != nil {
+					buff = append(buff, e)
+				}
+			}
+		case []gmaps.Entry:
+			for i := range v {
+				buff = append(buff, &v[i])
+			}
+		case []any:
+			// Recursive check for slices of any
+			for _, item := range v {
+				processData(item)
+			}
 		}
+	}
 
-		buff = append(buff, entry)
+	for result := range in {
+		processData(result.Data)
 
 		if len(buff) >= maxBatchSize || time.Now().UTC().Sub(lastSave) >= time.Minute {
 			if err := w.batchSave(ctx, buff); err != nil {
