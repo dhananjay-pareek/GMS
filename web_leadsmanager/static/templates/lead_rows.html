@@ -1,3 +1,4 @@
+{{define "lead_rows.html"}}
 {{range .Leads}}
 <tr class="lead-row lead-row-card" data-place-id="{{.PlaceID}}">
     <td colspan="10">
@@ -90,4 +91,5 @@
         </button>
     </td>
 </tr>
+{{end}}
 {{end}}
