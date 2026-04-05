@@ -34,7 +34,7 @@ func New(webhookURL string) scrapemate.ResultWriter {
 	return &webhookWriter{
 		url: webhookURL,
 		client: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout: 120 * time.Second, // Increased for cold starts on free Render tier
 		},
 	}
 }
@@ -108,21 +108,38 @@ func (w *webhookWriter) batchSave(ctx context.Context, entries []*gmaps.Entry) e
 		return err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, w.url, bytes.NewReader(b))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
+	// Retry up to 3 times for transient failures
+	var lastErr error
+	for attempt := 1; attempt <= 3; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, w.url, bytes.NewReader(b))
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Content-Type", "application/json")
 
-	resp, err := w.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("webhook request failed: %w", err)
-	}
-	defer resp.Body.Close()
+		resp, err := w.client.Do(req)
+		if err != nil {
+			lastErr = fmt.Errorf("webhook request failed (attempt %d): %w", attempt, err)
+			fmt.Printf("Webhook attempt %d failed: %v, retrying...\n", attempt, err)
+			time.Sleep(time.Duration(attempt*2) * time.Second)
+			continue
+		}
+		defer resp.Body.Close()
 
-	if resp.StatusCode >= 400 {
-		return fmt.Errorf("webhook returned status code: %d", resp.StatusCode)
+		if resp.StatusCode >= 500 {
+			lastErr = fmt.Errorf("webhook returned status %d (attempt %d)", resp.StatusCode, attempt)
+			fmt.Printf("Webhook attempt %d got status %d, retrying...\n", attempt, resp.StatusCode)
+			time.Sleep(time.Duration(attempt*2) * time.Second)
+			continue
+		}
+
+		if resp.StatusCode >= 400 {
+			return fmt.Errorf("webhook returned status code: %d", resp.StatusCode)
+		}
+
+		fmt.Printf("Webhook: sent %d entries successfully\n", len(entries))
+		return nil
 	}
 
-	return nil
+	return lastErr
 }

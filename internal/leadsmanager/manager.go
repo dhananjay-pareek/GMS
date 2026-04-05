@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/gosom/google-maps-scraper/gmaps"
 )
@@ -93,17 +94,28 @@ func (m *Manager) HandleImport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(leads) > 0 {
-		if err := m.db.UpsertLeads(r.Context(), leads); err != nil {
+		// Use a background context with timeout for DB operations
+		// This prevents the HTTP request timeout from canceling the DB operation
+		dbCtx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+		defer cancel()
+
+		if err := m.db.UpsertLeads(dbCtx, leads); err != nil {
 			log.Printf("error upserting leads: %v", err)
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "database error: " + err.Error()})
 			return
 		}
 
-		// Sync to Google Sheets (backup)
+		log.Printf("Successfully imported %d leads", len(leads))
+
+		// Sync to Google Sheets (backup) - also use background context
 		if m.sheetsSyncer != nil && m.sheetsSyncer.IsEnabled() {
-			if err := m.sheetsSyncer.SyncLeads(r.Context(), leads); err != nil {
+			if err := m.sheetsSyncer.SyncLeads(dbCtx, leads); err != nil {
 				log.Printf("warning: Google Sheets sync error: %v", err)
 				// Non-fatal - continue even if Sheets sync fails
+			}
+			// Force flush to send data immediately
+			if err := m.sheetsSyncer.Flush(); err != nil {
+				log.Printf("warning: Google Sheets flush error: %v", err)
 			}
 		}
 	}
