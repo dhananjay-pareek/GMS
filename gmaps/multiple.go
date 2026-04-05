@@ -45,6 +45,11 @@ func ParseSearchResults(raw []byte) ([]*Entry, error) {
 		entry.Categories = toStringSlice(getNthElementAndCast[[]any](business, 13))
 		entry.WebSite = extractWebsite(business)
 
+		// Set primary category from categories list
+		if len(entry.Categories) > 0 {
+			entry.Category = entry.Categories[0]
+		}
+
 		entry.ReviewRating = getNthElementAndCast[float64](business, 4, 7)
 		entry.ReviewCount = int(getNthElementAndCast[float64](business, 4, 8))
 
@@ -64,6 +69,9 @@ func ParseSearchResults(raw []byte) ([]*Entry, error) {
 			return sb.String()
 		}()
 
+		// Parse address components from full address
+		entry.CompleteAddress = parseAddressComponents(entry.Address)
+
 		entry.Latitude = getNthElementAndCast[float64](business, 9, 2)
 		entry.Longtitude = getNthElementAndCast[float64](business, 9, 3)
 		entry.Phone = strings.ReplaceAll(extractPhone(business), " ", "")
@@ -74,12 +82,99 @@ func ParseSearchResults(raw []byte) ([]*Entry, error) {
 		entry.PlaceID = getNthElementAndCast[string](business, 78)
 		entry.Link = getNthElementAndCast[string](business, 27)
 
+		// Generate Google Maps link if not present
+		if entry.Link == "" && entry.PlaceID != "" {
+			entry.Link = "https://www.google.com/maps/place/?q=place_id:" + entry.PlaceID
+		}
+
+		// Generate CID from DataID if available
+		if entry.Cid == "" && entry.DataID != "" {
+			entry.Cid = extractCidFromDataID(entry.DataID)
+		}
+
 		entry.PlusCode = olc.Encode(entry.Latitude, entry.Longtitude, 10)
 
 		entries = append(entries, &entry)
 	}
 
 	return entries, nil
+}
+
+// parseAddressComponents attempts to parse address string into components
+func parseAddressComponents(address string) Address {
+	parts := strings.Split(address, ", ")
+	addr := Address{}
+
+	if len(parts) == 0 {
+		return addr
+	}
+
+	// Last part is usually country
+	if len(parts) >= 1 {
+		addr.Country = parts[len(parts)-1]
+	}
+
+	// For Australian addresses: "47 Carlotta St, Artarmon NSW 2064, Australia"
+	// Format is typically: Street, City State PostCode, Country
+	if len(parts) >= 2 {
+		cityStatePostal := parts[len(parts)-2]
+		// Try to extract state and postal code (e.g., "Artarmon NSW 2064")
+		cityParts := strings.Fields(cityStatePostal)
+		if len(cityParts) >= 1 {
+			// Check if last part is postal code (numeric)
+			lastIdx := len(cityParts) - 1
+			if isPostalCode(cityParts[lastIdx]) {
+				addr.PostalCode = cityParts[lastIdx]
+				lastIdx--
+			}
+			// Check if second-to-last is a state abbreviation
+			if lastIdx >= 1 && isStateAbbrev(cityParts[lastIdx]) {
+				addr.State = cityParts[lastIdx]
+				lastIdx--
+			}
+			// Rest is city
+			if lastIdx >= 0 {
+				addr.City = strings.Join(cityParts[:lastIdx+1], " ")
+			}
+		}
+	}
+
+	// First part is street
+	if len(parts) >= 1 {
+		addr.Street = parts[0]
+	}
+
+	return addr
+}
+
+func isPostalCode(s string) bool {
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return len(s) >= 3 && len(s) <= 10
+}
+
+func isStateAbbrev(s string) bool {
+	// Common Australian state abbreviations
+	states := map[string]bool{
+		"NSW": true, "VIC": true, "QLD": true, "SA": true,
+		"WA": true, "TAS": true, "NT": true, "ACT": true,
+		// US states (some common ones)
+		"CA": true, "NY": true, "TX": true, "FL": true,
+	}
+	return states[strings.ToUpper(s)]
+}
+
+func extractCidFromDataID(dataID string) string {
+	// DataID format: "0x6b12af94dd6ab4b7:0x6d5eebf740b4b010"
+	// CID is the hex part after the colon
+	parts := strings.Split(dataID, ":")
+	if len(parts) == 2 {
+		return parts[1]
+	}
+	return ""
 }
 
 func toStringSlice(arr []any) []string {

@@ -83,8 +83,13 @@ func (w *webhookWriter) Run(ctx context.Context, in <-chan scrapemate.Result) er
 		}
 	}
 
+	// Final flush with a fresh context (original may be canceled)
 	if len(buff) > 0 {
-		if err := w.batchSave(ctx, buff); err != nil {
+		// Use a new context with timeout for final send
+		finalCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+
+		if err := w.batchSave(finalCtx, buff); err != nil {
 			fmt.Printf("Webhook export error: %v\n", err)
 		}
 	}
