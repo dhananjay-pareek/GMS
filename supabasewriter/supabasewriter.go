@@ -77,9 +77,12 @@ func (w *supabaseWriter) Run(ctx context.Context, in <-chan scrapemate.Result) e
 		processData(result.Data)
 
 		if len(buffer) >= batchSize {
-			if err := w.saveBatch(ctx, buffer); err != nil {
+			// Use fresh context for each batch to avoid cancellation issues
+			saveCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			if err := w.saveBatch(saveCtx, buffer); err != nil {
 				log.Printf("Supabase save error: %v", err)
 			}
+			cancel()
 			buffer = buffer[:0]
 		}
 	}
@@ -98,17 +101,23 @@ func (w *supabaseWriter) Run(ctx context.Context, in <-chan scrapemate.Result) e
 }
 
 func (w *supabaseWriter) saveBatch(ctx context.Context, entries []gmaps.Entry) error {
-	successCount := 0
-	for _, entry := range entries {
-		// Use the leadsmanager's ProcessEntry for consistent enrichment
-		lead := leadsmanager.ProcessEntry(entry)
-
-		if err := w.db.UpsertLead(ctx, &lead); err != nil {
-			log.Printf("Supabase upsert error for %s: %v", entry.PlaceID, err)
-			continue
-		}
-		successCount++
+	if len(entries) == 0 {
+		return nil
 	}
+
+	// Convert entries to leads
+	leads := make([]leadsmanager.Lead, 0, len(entries))
+	for _, entry := range entries {
+		lead := leadsmanager.ProcessEntry(entry)
+		leads = append(leads, lead)
+	}
+
+	// Bulk upsert all leads in one batch operation
+	successCount, err := w.db.BulkUpsertLeads(ctx, leads)
+	if err != nil {
+		log.Printf("Supabase bulk upsert error: %v", err)
+	}
+
 	log.Printf("Supabase: saved %d/%d entries", successCount, len(entries))
 	return nil
 }

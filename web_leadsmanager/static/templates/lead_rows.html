@@ -1,50 +1,71 @@
 {{range .Leads}}
-<tr class="lead-row" data-place-id="{{.PlaceID}}">
-    <td class="lead-title-cell">
-        <div class="lead-title">{{.Title}}</div>
-        <div class="lead-address text-muted">{{truncate .Address 40}}</div>
-    </td>
-    <td><span class="category-badge">{{.Category}}</span></td>
-    <td>{{.City}}</td>
-    <td class="{{if not .IsPhoneValid}}cell-warn{{end}}">
-        {{if .Phone}}{{.Phone}}{{else}}<span class="text-muted">—</span>{{end}}
-    </td>
-    <td>
-        {{if gt .ReviewRating 0.0}}
-        <span class="rating-badge {{if lt .ReviewRating 4.0}}rating-low{{else}}rating-good{{end}}">
-            ★ {{formatRating .ReviewRating}}
-        </span>
-        {{else}}
-        <span class="text-muted">—</span>
-        {{end}}
-    </td>
-    <td>{{.ReviewCount}}</td>
-    <td>
-        {{if .Website}}
-        <a href="{{.Website}}" target="_blank" rel="noopener" class="website-link" title="{{.Website}}">🔗</a>
-        {{else}}
-        <span class="text-muted">—</span>
-        {{end}}
-    </td>
-    <td>{{boolIcon .HasSSL}}</td>
-    <td class="tags-cell">
-        {{range .ServiceTags}}
-        <span class="service-tag">{{.}}</span>
-        {{end}}
-    </td>
-    <td class="actions-cell">
-        {{if .Website}}
-        <button class="btn-action btn-action-blue" onclick="runAction('techstack','{{.PlaceID}}',this)"
-            title="Detect Tech Stack">🔧</button>
-        <button class="btn-action btn-action-green" onclick="runAction('pagespeed','{{.PlaceID}}',this)"
-            title="Run PageSpeed">⚡</button>
-        <button class="btn-action btn-action-purple" onclick="runAction('screenshot','{{.PlaceID}}',this)"
-            title="Take Screenshot">📸</button>
-        <button class="btn-action btn-action-orange" onclick="runAction('contacts','{{.PlaceID}}',this)"
-            title="Find Contacts">👤</button>
-        {{end}}
-        <button class="btn-action btn-action-pink" onclick="runAction('pitch','{{.PlaceID}}',this)"
-            title="Generate Pitch">✉️</button>
+<tr class="lead-row lead-row-card" data-place-id="{{.PlaceID}}">
+    <td colspan="10">
+        <div class="lead-card">
+            <!-- Row 1: Main Info -->
+            <div class="lead-card-row lead-card-row-main">
+                <div class="lead-info-primary">
+                    <div class="lead-title-wrap">
+                        <span class="lead-title">{{.Title}}</span>
+                        <span class="category-badge">{{.Category}}</span>
+                    </div>
+                    <div class="lead-meta">
+                        <span class="lead-location">📍 {{.City}}{{if .State}}, {{.State}}{{end}}</span>
+                        {{if .Phone}}<span class="lead-phone {{if not .IsPhoneValid}}cell-warn{{end}}">📞 {{.Phone}}</span>{{end}}
+                        {{if .Website}}<a href="{{.Website}}" target="_blank" rel="noopener" class="lead-website" title="{{.Website}}">🌐 Website</a>{{end}}
+                    </div>
+                </div>
+                <div class="lead-info-stats">
+                    {{if gt .ReviewRating 0.0}}
+                    <div class="lead-rating {{if lt .ReviewRating 4.0}}rating-low{{else}}rating-good{{end}}">
+                        <span class="rating-star">★</span>
+                        <span class="rating-value">{{formatRating .ReviewRating}}</span>
+                        <span class="rating-count">({{.ReviewCount}})</span>
+                    </div>
+                    {{else}}
+                    <div class="lead-rating rating-none">
+                        <span class="text-muted">No reviews</span>
+                    </div>
+                    {{end}}
+                    <div class="lead-indicators">
+                        <span class="indicator" title="SSL">{{boolIcon .HasSSL}} SSL</span>
+                        <span class="indicator" title="Analytics">{{boolIcon .HasAnalytics}} Analytics</span>
+                        {{if .GmbClaimed}}<span class="indicator indicator-good">✅ GMB Claimed</span>{{else}}<span class="indicator indicator-warn">⚠️ Unclaimed</span>{{end}}
+                    </div>
+                </div>
+            </div>
+            <!-- Row 2: Tags & Actions -->
+            <div class="lead-card-row lead-card-row-actions">
+                <div class="lead-tags">
+                    {{if .ServiceTags}}
+                    {{range .ServiceTags}}
+                    <span class="service-tag">{{.}}</span>
+                    {{end}}
+                    {{else}}
+                    <span class="text-muted text-sm">No issues detected</span>
+                    {{end}}
+                </div>
+                <div class="lead-actions">
+                    {{if .Website}}
+                    <button class="btn-action-label btn-action-blue" onclick="runAction('techstack','{{.PlaceID}}',this)" title="Detect Tech Stack">
+                        <span class="btn-icon">🔧</span><span class="btn-text">Tech</span>
+                    </button>
+                    <button class="btn-action-label btn-action-green" onclick="runAction('pagespeed','{{.PlaceID}}',this)" title="Run PageSpeed">
+                        <span class="btn-icon">⚡</span><span class="btn-text">Speed</span>
+                    </button>
+                    <button class="btn-action-label btn-action-purple" onclick="runAction('screenshot','{{.PlaceID}}',this)" title="Take Screenshot">
+                        <span class="btn-icon">📸</span><span class="btn-text">Shot</span>
+                    </button>
+                    <button class="btn-action-label btn-action-orange" onclick="runAction('contacts','{{.PlaceID}}',this)" title="Find Contacts">
+                        <span class="btn-icon">👤</span><span class="btn-text">Contact</span>
+                    </button>
+                    {{end}}
+                    <button class="btn-action-label btn-action-pink" onclick="runAction('pitch','{{.PlaceID}}',this)" title="Generate Pitch">
+                        <span class="btn-icon">✉️</span><span class="btn-text">Pitch</span>
+                    </button>
+                </div>
+            </div>
+        </div>
     </td>
 </tr>
 {{end}}
@@ -61,7 +82,7 @@
 
 {{if and (gt .Pages 1) (lt .Page .Pages)}}
 <tr id="load-more-row">
-    <td colspan="10" style="text-align:center; padding:1.5rem;">
+    <td colspan="10" class="load-more-cell">
         <button class="btn-load-more"
             hx-get="/lead-rows?page={{add .Page 1}}&search={{.Search}}&city={{.City}}&category={{.Category}}&tag={{.Tag}}"
             hx-target="#leads-tbody" hx-swap="innerHTML" hx-indicator="#table-spinner">

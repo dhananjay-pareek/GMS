@@ -53,11 +53,19 @@ func (app *ScrapemateApp) Start(ctx context.Context, seedJobs ...scrapemate.IJob
 	defer app.Close()
 	defer mate.Close()
 
+	// Create per-writer channels for fan-out (broadcast to all writers)
+	writerChans := make([]chan scrapemate.Result, len(app.cfg.Writers))
+	for i := range app.cfg.Writers {
+		writerChans[i] = make(chan scrapemate.Result, 100)
+	}
+
+	// Start writers with their individual channels
 	for i := range app.cfg.Writers {
 		writer := app.cfg.Writers[i]
+		ch := writerChans[i]
 
 		g.Go(func() error {
-			if err := writer.Run(ctx, mate.Results()); err != nil {
+			if err := writer.Run(ctx, ch); err != nil {
 				cancel(err)
 				return err
 			}
@@ -65,6 +73,26 @@ func (app *ScrapemateApp) Start(ctx context.Context, seedJobs ...scrapemate.IJob
 			return nil
 		})
 	}
+
+	// Fan-out: broadcast results to all writer channels
+	g.Go(func() error {
+		defer func() {
+			for _, ch := range writerChans {
+				close(ch)
+			}
+		}()
+
+		for result := range mate.Results() {
+			for _, ch := range writerChans {
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case ch <- result:
+				}
+			}
+		}
+		return nil
+	})
 
 	g.Go(func() error {
 		return mate.Start()

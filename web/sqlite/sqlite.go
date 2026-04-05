@@ -125,11 +125,17 @@ func rowToJob(row scannable) (web.Job, error) {
 		return web.Job{}, err
 	}
 
+	// Convert to Asia/Kolkata timezone
+	loc, err := time.LoadLocation("Asia/Kolkata")
+	if err != nil {
+		loc = time.FixedZone("IST", 5*60*60+30*60)
+	}
+
 	ans := web.Job{
 		ID:     j.ID,
 		Name:   j.Name,
 		Status: j.Status,
-		Date:   time.Unix(j.CreatedAt, 0).UTC(),
+		Date:   time.Unix(j.CreatedAt, 0).In(loc),
 	}
 
 	err = json.Unmarshal([]byte(j.Data), &ans.Data)

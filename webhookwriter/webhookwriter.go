@@ -75,9 +75,12 @@ func (w *webhookWriter) Run(ctx context.Context, in <-chan scrapemate.Result) er
 		processData(result.Data)
 
 		if len(buff) >= maxBatchSize || time.Now().UTC().Sub(lastSave) >= time.Minute {
-			if err := w.batchSave(ctx, buff); err != nil {
+			// Use fresh context for each batch - 180s for Render cold starts
+			saveCtx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+			if err := w.batchSave(saveCtx, buff); err != nil {
 				fmt.Printf("Webhook export error: %v\n", err)
 			}
+			cancel()
 			buff = buff[:0]
 			lastSave = time.Now().UTC()
 		}
@@ -86,7 +89,7 @@ func (w *webhookWriter) Run(ctx context.Context, in <-chan scrapemate.Result) er
 	// Final flush with a fresh context (original may be canceled)
 	if len(buff) > 0 {
 		// Use a new context with timeout for final send
-		finalCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		finalCtx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 		defer cancel()
 
 		if err := w.batchSave(finalCtx, buff); err != nil {

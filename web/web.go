@@ -267,7 +267,7 @@ func (s *Server) scrape(w http.ResponseWriter, r *http.Request) {
 	newJob := Job{
 		ID:     uuid.New().String(),
 		Name:   r.Form.Get("name"),
-		Date:   time.Now().UTC(),
+		Date:   kolkataTime(),
 		Status: StatusPending,
 		Data:   JobData{},
 	}
@@ -510,7 +510,7 @@ func (s *Server) apiScrape(w http.ResponseWriter, r *http.Request) {
 	newJob := Job{
 		ID:     uuid.New().String(),
 		Name:   req.Name,
-		Date:   time.Now().UTC(),
+		Date:   kolkataTime(),
 		Status: StatusPending,
 		Data:   req.JobData,
 	}
@@ -630,6 +630,16 @@ func renderJSON(w http.ResponseWriter, code int, data any) {
 
 func formatDate(t time.Time) string {
 	return t.Format("Jan 02, 2006 15:04:05")
+}
+
+// kolkataTime converts UTC time to Asia/Kolkata timezone
+func kolkataTime() time.Time {
+	loc, err := time.LoadLocation("Asia/Kolkata")
+	if err != nil {
+		// Fallback: IST is UTC+5:30
+		loc = time.FixedZone("IST", 5*60*60+30*60)
+	}
+	return time.Now().In(loc)
 }
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {

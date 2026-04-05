@@ -177,6 +177,104 @@ func (db *DB) UpsertLead(ctx context.Context, l *Lead) error {
 	return err
 }
 
+// BulkUpsertLeads batch-inserts or updates multiple leads in a single transaction.
+// This is much faster than individual upserts.
+func (db *DB) BulkUpsertLeads(ctx context.Context, leads []Lead) (int, error) {
+	if len(leads) == 0 {
+		return 0, nil
+	}
+
+	batch := &pgx.Batch{}
+
+	query := `
+		INSERT INTO gmaps_leads (
+			place_id, title, category, categories, address, city, state, country, postal_code,
+			phone, emails, website, review_count, review_rating, latitude, longitude,
+			gmaps_link, cid, status, description, owner_name, owner_id, thumbnail,
+			timezone, price_range, plus_code,
+			is_email_valid, is_phone_valid, has_ssl, has_analytics, has_facebook_pixel,
+			has_h1, has_meta_desc, page_speed_score, tech_stack, social_links,
+			service_tags, gmb_claimed
+		) VALUES (
+			$1, $2, $3, $4, $5, $6, $7, $8, $9,
+			$10, $11, $12, $13, $14, $15, $16,
+			$17, $18, $19, $20, $21, $22, $23,
+			$24, $25, $26,
+			$27, $28, $29, $30, $31,
+			$32, $33, $34, $35, $36,
+			$37, $38
+		)
+		ON CONFLICT (place_id) DO UPDATE SET
+			title = EXCLUDED.title,
+			category = EXCLUDED.category,
+			categories = EXCLUDED.categories,
+			address = EXCLUDED.address,
+			city = EXCLUDED.city,
+			state = EXCLUDED.state,
+			country = EXCLUDED.country,
+			postal_code = EXCLUDED.postal_code,
+			phone = EXCLUDED.phone,
+			emails = EXCLUDED.emails,
+			website = EXCLUDED.website,
+			review_count = EXCLUDED.review_count,
+			review_rating = EXCLUDED.review_rating,
+			latitude = EXCLUDED.latitude,
+			longitude = EXCLUDED.longitude,
+			gmaps_link = EXCLUDED.gmaps_link,
+			cid = EXCLUDED.cid,
+			status = EXCLUDED.status,
+			description = EXCLUDED.description,
+			owner_name = EXCLUDED.owner_name,
+			owner_id = EXCLUDED.owner_id,
+			thumbnail = EXCLUDED.thumbnail,
+			timezone = EXCLUDED.timezone,
+			price_range = EXCLUDED.price_range,
+			plus_code = EXCLUDED.plus_code,
+			is_email_valid = EXCLUDED.is_email_valid,
+			is_phone_valid = EXCLUDED.is_phone_valid,
+			has_ssl = EXCLUDED.has_ssl,
+			has_analytics = EXCLUDED.has_analytics,
+			has_facebook_pixel = EXCLUDED.has_facebook_pixel,
+			has_h1 = EXCLUDED.has_h1,
+			has_meta_desc = EXCLUDED.has_meta_desc,
+			page_speed_score = EXCLUDED.page_speed_score,
+			tech_stack = EXCLUDED.tech_stack,
+			social_links = EXCLUDED.social_links,
+			service_tags = EXCLUDED.service_tags,
+			gmb_claimed = EXCLUDED.gmb_claimed
+	`
+
+	for _, l := range leads {
+		socialLinks := l.SocialLinks
+		if socialLinks == "" {
+			socialLinks = "{}"
+		}
+
+		batch.Queue(query,
+			l.PlaceID, l.Title, l.Category, l.Categories, l.Address, l.City, l.State, l.Country, l.PostalCode,
+			l.Phone, l.Emails, l.Website, l.ReviewCount, l.ReviewRating, l.Latitude, l.Longitude,
+			l.GmapsLink, l.Cid, l.Status, l.Description, l.OwnerName, l.OwnerID, l.Thumbnail,
+			l.Timezone, l.PriceRange, l.PlusCode,
+			l.IsEmailValid, l.IsPhoneValid, l.HasSSL, l.HasAnalytics, l.HasFacebookPixel,
+			l.HasH1, l.HasMetaDesc, l.PageSpeedScore, l.TechStack, socialLinks,
+			l.ServiceTags, l.GmbClaimed,
+		)
+	}
+
+	br := db.pool.SendBatch(ctx, batch)
+	defer br.Close()
+
+	successCount := 0
+	for i := 0; i < len(leads); i++ {
+		_, err := br.Exec()
+		if err == nil {
+			successCount++
+		}
+	}
+
+	return successCount, nil
+}
+
 // UpsertLeads batch-inserts or updates multiple leads.
 func (db *DB) UpsertLeads(ctx context.Context, leads []Lead) error {
 	for i := range leads {
@@ -325,6 +423,35 @@ func (db *DB) GetCompetitors(ctx context.Context, city string, minRating float64
 	`
 
 	rows, err := db.pool.Query(ctx, query, city, minRating)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return scanLeads(rows)
+}
+
+// GetCompetitorsByCategory finds top-rated leads in the same city and category (market leaders).
+func (db *DB) GetCompetitorsByCategory(ctx context.Context, city, category, excludePlaceID string, minRating float64) ([]Lead, error) {
+	query := `
+		SELECT place_id, title, category, categories, address, city, state, country, postal_code,
+			phone, emails, website, review_count, review_rating, latitude, longitude,
+			gmaps_link, cid, status, description, owner_name, owner_id, thumbnail,
+			timezone, price_range, plus_code,
+			is_email_valid, is_phone_valid, has_ssl, has_analytics, has_facebook_pixel,
+			has_h1, has_meta_desc, page_speed_score, tech_stack, social_links,
+			service_tags, gmb_claimed, created_at, updated_at
+		FROM gmaps_leads
+		WHERE city ILIKE $1 
+			AND category ILIKE $2
+			AND place_id != $3
+			AND review_rating >= $4
+			AND review_count >= 10
+		ORDER BY review_rating DESC, review_count DESC
+		LIMIT 3
+	`
+
+	rows, err := db.pool.Query(ctx, query, city, category, excludePlaceID, minRating)
 	if err != nil {
 		return nil, err
 	}

@@ -5,6 +5,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"strings"
 	"time"

@@ -14,8 +14,8 @@
         <div class="top-bar-inner">
             <h1 class="logo">Rankernet's <span>LeadsPilot</span></h1>
             <nav class="top-nav">
-                <select id="llm-provider"
-                    style="padding: 0.5rem; border-radius: 4px; border: 1px solid #ddd; font-size: 0.85rem; margin-right: 0.5rem; background: #fff;">
+                <label for="llm-provider" class="sr-only">LLM Provider</label>
+                <select id="llm-provider" class="nav-select" aria-label="Select LLM Provider">
                     <option value="gemini">Gemini (Google)</option>
                     <option value="openai">OpenAI (GPT-4o)</option>
                     <option value="anthropic">Anthropic (Claude)</option>
@@ -28,10 +28,10 @@
                     <option value="perplexity">Perplexity</option>
                     <option value="ollama">Ollama (Local URL)</option>
                 </select>
-                <input type="password" id="llm-api-key" placeholder="Enter API Key or Host URL"
-                    style="padding: 0.5rem; border-radius: 4px; border: 1px solid #ddd; font-size: 0.85rem; width: 250px; margin-right: 0.5rem;">
-                <input type="text" id="llm-model" placeholder="Model (Optional)"
-                    style="padding: 0.5rem; border-radius: 4px; border: 1px solid #ddd; font-size: 0.85rem; width: 150px; margin-right: 1rem;">
+                <label for="llm-api-key" class="sr-only">API Key</label>
+                <input type="password" id="llm-api-key" class="nav-input nav-input-wide" placeholder="Enter API Key or Host URL" aria-label="API Key or Host URL">
+                <label for="llm-model" class="sr-only">Model Name</label>
+                <input type="text" id="llm-model" class="nav-input" placeholder="Model (Optional)" aria-label="Model Name">
             </nav>
         </div>
     </header>
@@ -55,7 +55,8 @@
                     <input type="text" name="city" id="filter-city" placeholder="City" class="filter-input" />
                     <input type="text" name="category" id="filter-category" placeholder="Category"
                         class="filter-input" />
-                    <select name="tag" id="filter-tag" class="filter-input">
+                    <label for="filter-tag" class="sr-only">Filter by Tag</label>
+                    <select name="tag" id="filter-tag" class="filter-input" aria-label="Filter by Service Tag">
                         <option value="">All Tags</option>
                         <option value="No Website">No Website</option>
                         <option value="No SSL">No SSL</option>
@@ -82,19 +83,10 @@
                 <div id="table-spinner" class="spinner"></div>
             </div>
             <div class="table-responsive">
-                <table class="leads-table" id="leads-table">
-                    <thead>
+                <table class="leads-table leads-table-cards" id="leads-table">
+                    <thead class="sr-only">
                         <tr>
-                            <th>Business</th>
-                            <th>Category</th>
-                            <th>City</th>
-                            <th>Phone</th>
-                            <th>Rating</th>
-                            <th>Reviews</th>
-                            <th>Website</th>
-                            <th>SSL</th>
-                            <th>Tags</th>
-                            <th>Actions</th>
+                            <th>Lead Details</th>
                         </tr>
                     </thead>
                     <tbody id="leads-tbody" hx-get="/lead-rows" hx-trigger="load" hx-swap="innerHTML"

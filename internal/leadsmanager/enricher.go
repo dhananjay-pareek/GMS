@@ -408,6 +408,9 @@ func (e *Enricher) GeneratePitchPrompt(ctx context.Context, placeID, persona, ap
 		techStr = strings.Join(lead.TechStack, ", ")
 	}
 
+	// Fetch market leaders (competitors in same city + category with high ratings)
+	competitorSection := e.buildCompetitorAnalysis(ctx, lead)
+
 	prompt := fmt.Sprintf(`You are a %s at a digital marketing agency. Write a personalized cold email pitch for this business:
 
 **Business:** %s
@@ -420,10 +423,13 @@ func (e *Enricher) GeneratePitchPrompt(ctx context.Context, placeID, persona, ap
 **Issues Found:**
 %s
 
+%s
+
 Instructions:
 - Be conversational and NOT salesy
 - Lead with a specific compliment about their business
 - Mention 1-2 specific issues you noticed (be tactful, not critical)
+- If competitor data is available, tactfully mention how top competitors are performing better (e.g., "I noticed [Competitor] in your area has 3x more reviews" or "Their website loads 2x faster")
 - Offer a free audit or consultation
 - Keep it under 150 words
 - Include a clear call to action
@@ -436,6 +442,7 @@ Instructions:
 		lead.ReviewRating, lead.ReviewCount,
 		techStr,
 		strings.Join(issues, "\n- "),
+		competitorSection,
 	)
 
 	if apiKey == "" {
@@ -456,6 +463,74 @@ Instructions:
 	default:
 		return e.callOpenAICompatible(ctx, prompt, apiKey, provider, modelName)
 	}
+}
+
+// buildCompetitorAnalysis fetches market leaders and builds competitive insights.
+func (e *Enricher) buildCompetitorAnalysis(ctx context.Context, lead *Lead) string {
+	if lead.City == "" {
+		return ""
+	}
+
+	// Fetch top competitors in same city with rating >= 4.5
+	competitors, err := e.db.GetCompetitorsByCategory(ctx, lead.City, lead.Category, lead.PlaceID, 4.0)
+	if err != nil || len(competitors) == 0 {
+		return ""
+	}
+
+	var insights []string
+
+	// Find the market leader (highest rated with most reviews)
+	marketLeader := competitors[0]
+
+	// Review comparison
+	if marketLeader.ReviewCount > lead.ReviewCount*2 {
+		multiplier := float64(marketLeader.ReviewCount) / float64(lead.ReviewCount)
+		if lead.ReviewCount == 0 {
+			insights = append(insights, fmt.Sprintf("Market leader \"%s\" has %d reviews while this business has none", marketLeader.Title, marketLeader.ReviewCount))
+		} else {
+			insights = append(insights, fmt.Sprintf("Market leader \"%s\" has %.0fx more reviews (%d vs %d)", marketLeader.Title, multiplier, marketLeader.ReviewCount, lead.ReviewCount))
+		}
+	}
+
+	// Rating comparison
+	if marketLeader.ReviewRating > lead.ReviewRating+0.5 {
+		insights = append(insights, fmt.Sprintf("\"%s\" has a %.1f rating vs this business's %.1f", marketLeader.Title, marketLeader.ReviewRating, lead.ReviewRating))
+	}
+
+	// PageSpeed comparison
+	if marketLeader.PageSpeedScore != nil && lead.PageSpeedScore != nil {
+		leaderSpeed := *marketLeader.PageSpeedScore
+		leadSpeed := *lead.PageSpeedScore
+		if leaderSpeed > leadSpeed+20 {
+			insights = append(insights, fmt.Sprintf("Competitor's website is faster (PageSpeed %d vs %d)", leaderSpeed, leadSpeed))
+		}
+	}
+
+	// SSL comparison
+	if marketLeader.HasSSL != nil && lead.HasSSL != nil {
+		if *marketLeader.HasSSL && !*lead.HasSSL {
+			insights = append(insights, "Top competitors have SSL/HTTPS while this business doesn't")
+		}
+	}
+
+	// Analytics comparison
+	if marketLeader.HasAnalytics != nil && lead.HasAnalytics != nil {
+		if *marketLeader.HasAnalytics && !*lead.HasAnalytics {
+			insights = append(insights, "Market leaders use Google Analytics for tracking while this business doesn't")
+		}
+	}
+
+	// Website presence comparison
+	if marketLeader.Website != "" && lead.Website == "" {
+		insights = append(insights, fmt.Sprintf("Competitor \"%s\" has a professional website while this business has no online presence", marketLeader.Title))
+	}
+
+	if len(insights) == 0 {
+		return ""
+	}
+
+	return fmt.Sprintf("**Competitive Analysis (Market Leaders in %s - %s):**\n- %s",
+		lead.City, lead.Category, strings.Join(insights, "\n- "))
 }
 
 func (e *Enricher) callGemini(ctx context.Context, prompt, apiKey, modelName string) (string, error) {

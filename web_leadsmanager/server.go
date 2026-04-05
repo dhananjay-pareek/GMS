@@ -244,7 +244,7 @@ func securityHeaders(next http.Handler) http.Handler {
 				"script-src 'self' cdnjs.cloudflare.com 'unsafe-inline'; "+
 				"style-src 'self' 'unsafe-inline' fonts.googleapis.com; "+
 				"font-src 'self' fonts.gstatic.com; "+
-				"img-src 'self' data:; "+
+				"img-src 'self' data: https://*.thum.io https://*.googleusercontent.com; "+
 				"connect-src 'self'")
 		next.ServeHTTP(w, r)
 	})
