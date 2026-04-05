@@ -13,6 +13,7 @@ import (
 	"github.com/gosom/google-maps-scraper/exiter"
 	"github.com/gosom/google-maps-scraper/leadsdb"
 	"github.com/gosom/google-maps-scraper/runner"
+	"github.com/gosom/google-maps-scraper/supabasewriter"
 	"github.com/gosom/google-maps-scraper/tlmt"
 	"github.com/gosom/google-maps-scraper/webhookwriter"
 	"github.com/gosom/scrapemate"
@@ -188,6 +189,17 @@ func (r *fileRunner) setWriters() error {
 
 	if r.cfg.WebhookURL != "" {
 		r.writers = append(r.writers, webhookwriter.New(r.cfg.WebhookURL))
+	}
+
+	// Direct Supabase writer
+	if r.cfg.SupabaseDBURL != "" {
+		sbWriter, err := supabasewriter.New(r.cfg.SupabaseDBURL)
+		if err != nil {
+			log.Printf("Warning: could not create Supabase writer: %v", err)
+		} else {
+			r.writers = append(r.writers, sbWriter)
+			log.Println("Supabase writer enabled - leads will be saved directly to database")
+		}
 	}
 
 	return nil

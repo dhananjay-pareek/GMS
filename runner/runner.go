@@ -84,6 +84,7 @@ type Config struct {
 	DBType                   string
 	GoogleSheetID            string
 	WebhookURL               string
+	SupabaseDBURL            string
 }
 
 func ParseConfig() *Config {
@@ -159,6 +160,9 @@ func ParseConfig() *Config {
 
 	defaultWebhook := os.Getenv("WEBHOOK_URL")
 	flag.StringVar(&cfg.WebhookURL, "webhook-url", defaultWebhook, "Webhook URL to POST exported leads to (reads WEBHOOK_URL env var)")
+
+	defaultSupabaseURL := os.Getenv("SUPABASE_DB_URL")
+	flag.StringVar(&cfg.SupabaseDBURL, "supabase-url", defaultSupabaseURL, "Supabase/PostgreSQL URL to write leads directly (reads SUPABASE_DB_URL env var)")
 
 	flag.Parse()
 

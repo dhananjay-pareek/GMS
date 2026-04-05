@@ -23,6 +23,7 @@ import (
 	"github.com/gosom/google-maps-scraper/web/jsonrepo"
 	"github.com/gosom/google-maps-scraper/web/sqlite"
 	"github.com/gosom/google-maps-scraper/webhookwriter"
+	"github.com/gosom/google-maps-scraper/supabasewriter"
 	"github.com/gosom/scrapemate"
 	"github.com/gosom/scrapemate/adapters/writers/csvwriter"
 	"github.com/gosom/scrapemate/scrapemateapp"
@@ -408,6 +409,17 @@ func (w *webrunner) setupMate(_ context.Context, wCsv *csv.Writer, job *web.Job)
 
 	if w.cfg.WebhookURL != "" {
 		writers = append(writers, webhookwriter.New(w.cfg.WebhookURL))
+	}
+
+	// Direct Supabase writer (preferred over webhook)
+	if w.cfg.SupabaseDBURL != "" {
+		sbWriter, err := supabasewriter.New(w.cfg.SupabaseDBURL)
+		if err != nil {
+			log.Printf("Warning: could not create Supabase writer: %v", err)
+		} else {
+			writers = append(writers, sbWriter)
+			log.Println("Supabase writer enabled - leads will be saved directly to database")
+		}
 	}
 
 	var finalWriters []scrapemate.ResultWriter
