@@ -104,6 +104,10 @@ func New(mgr *leadsmanager.Manager, addr string) (*Server, error) {
 	mux.HandleFunc("/api/enrich/contacts", mgr.HandleContacts)
 	mux.HandleFunc("/api/enrich/pitch", mgr.HandlePitchPrompt)
 
+	// Google Sheets sync
+	mux.HandleFunc("/api/sheets/sync", mgr.HandleSheetsSync)
+	mux.HandleFunc("/api/sheets/status", mgr.HandleSheetsStatus)
+
 	mux.HandleFunc("/health", s.health)
 
 	handler := securityHeaders(mux)

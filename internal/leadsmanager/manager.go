@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 
 	"github.com/gosom/google-maps-scraper/gmaps"
@@ -13,8 +14,9 @@ import (
 
 // Manager coordinates the leads pipeline and database operations.
 type Manager struct {
-	db       *DB
-	enricher *Enricher
+	db           *DB
+	enricher     *Enricher
+	sheetsSyncer *SheetsSyncer
 }
 
 // NewManager creates a new Manager instance.
@@ -23,7 +25,15 @@ func NewManager(db *DB) (*Manager, error) {
 	if err != nil {
 		return nil, fmt.Errorf("init enricher: %w", err)
 	}
-	return &Manager{db: db, enricher: enricher}, nil
+
+	// Initialize Google Sheets syncer (optional - returns nil if not configured)
+	sheetsSyncer := NewSheetsSyncer()
+
+	return &Manager{
+		db:           db,
+		enricher:     enricher,
+		sheetsSyncer: sheetsSyncer,
+	}, nil
 }
 
 // DB returns the database instance for direct queries.
@@ -87,6 +97,14 @@ func (m *Manager) HandleImport(w http.ResponseWriter, r *http.Request) {
 			log.Printf("error upserting leads: %v", err)
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "database error: " + err.Error()})
 			return
+		}
+
+		// Sync to Google Sheets (backup)
+		if m.sheetsSyncer != nil && m.sheetsSyncer.IsEnabled() {
+			if err := m.sheetsSyncer.SyncLeads(r.Context(), leads); err != nil {
+				log.Printf("warning: Google Sheets sync error: %v", err)
+				// Non-fatal - continue even if Sheets sync fails
+			}
 		}
 	}
 
@@ -328,6 +346,50 @@ func (m *Manager) HandlePitchPrompt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"prompt": prompt, "place_id": placeID})
+}
+
+// HandleSheetsSync manually syncs leads to Google Sheets.
+func (m *Manager) HandleSheetsSync(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if m.sheetsSyncer == nil || !m.sheetsSyncer.IsEnabled() {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+			"error":  "Google Sheets sync not configured",
+			"hint":   "Set GOOGLE_SHEET_ID and GOOGLE_CREDENTIALS_JSON environment variables",
+			"status": "disabled",
+		})
+		return
+	}
+
+	// Flush any buffered data
+	if err := m.sheetsSyncer.Flush(); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{
+		"status":  "ok",
+		"message": "Google Sheets sync completed",
+	})
+}
+
+// HandleSheetsStatus returns the status of Google Sheets sync.
+func (m *Manager) HandleSheetsStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	enabled := m.sheetsSyncer != nil && m.sheetsSyncer.IsEnabled()
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"enabled":      enabled,
+		"sheet_id_set": os.Getenv("GOOGLE_SHEET_ID") != "",
+		"creds_set":    os.Getenv("GOOGLE_CREDENTIALS_JSON") != "",
+	})
 }
 
 func writeJSON(w http.ResponseWriter, code int, data any) {

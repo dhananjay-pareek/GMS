@@ -41,12 +41,17 @@ func New(spreadsheetID, sheetName string) (scrapemate.ResultWriter, error) {
 		return nil, fmt.Errorf("GOOGLE_CREDENTIALS_JSON environment variable is not set")
 	}
 
+	// Log credential info (without exposing secrets)
+	log.Printf("Google Sheets: credentials length=%d, sheet_id=%s", len(credsJSON), spreadsheetID)
+
 	b := []byte(credsJSON)
 
 	config, err := google.JWTConfigFromJSON(b, sheets.SpreadsheetsScope)
 	if err != nil {
-		return nil, fmt.Errorf("unable to parse credentials: %w", err)
+		return nil, fmt.Errorf("unable to parse credentials (check JSON format): %w", err)
 	}
+
+	log.Printf("Google Sheets: service account email=%s", config.Email)
 
 	client := config.Client(ctx)
 	srv, err := sheets.NewService(ctx, option.WithHTTPClient(client))
@@ -77,10 +82,13 @@ func New(spreadsheetID, sheetName string) (scrapemate.ResultWriter, error) {
 
 // initSheet checks the current sheet's row count and writes headers if empty.
 func (w *gsWriter) initSheet() error {
+	log.Printf("Google Sheets: checking sheet %q in spreadsheet %s", w.currentSheet, w.spreadsheetID)
+	
 	resp, err := w.srv.Spreadsheets.Values.Get(w.spreadsheetID, w.currentSheet).Do()
 	if err != nil {
 		// Sheet might not exist yet; that's fine, we'll try to create it
-		log.Printf("Could not read sheet %q (may not exist yet): %v", w.currentSheet, err)
+		log.Printf("Could not read sheet %q (may not exist yet or permission denied): %v", w.currentSheet, err)
+		log.Printf("HINT: Make sure you shared your Google Sheet with the service account email as Editor!")
 		w.currentRows = 0
 
 		return w.writeHeaders()
