@@ -19,13 +19,13 @@ import (
 
 // Enricher handles on-demand enrichment tasks for leads.
 type Enricher struct {
-	db         *DB
+	db         LeadStore
 	httpClient *http.Client
 	wappalyze  *wappalyzer.Wappalyze
 }
 
 // NewEnricher creates a new enrichment engine.
-func NewEnricher(db *DB) (*Enricher, error) {
+func NewEnricher(db LeadStore) (*Enricher, error) {
 	wap, err := wappalyzer.New()
 	if err != nil {
 		return nil, fmt.Errorf("init wappalyzer: %w", err)

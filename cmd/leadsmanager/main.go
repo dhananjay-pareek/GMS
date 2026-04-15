@@ -57,14 +57,30 @@ func main() {
 		ollamaURL = "http://localhost:11434"
 	}
 
-	db, err := leadsmanager.NewDB(ctx, dbPath)
+	// Open local SQLite database
+	localDB, err := leadsmanager.NewDB(ctx, dbPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to connect to database: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Failed to connect to local database: %v\n", err)
 		os.Exit(1)
 	}
-	defer db.Close()
+	defer localDB.Close()
 
-	mgr, err := leadsmanager.NewManager(db, llmProvider, llmAPIKey, llmModel, ollamaURL)
+	// Build the LeadStore: CombinedDB if DATABASE_URL is set, otherwise local only.
+	var store leadsmanager.LeadStore = localDB
+
+	if dsn := os.Getenv("DATABASE_URL"); dsn != "" {
+		supDB, err := leadsmanager.NewSupabaseDB(dsn)
+		if err != nil {
+			log.Printf("WARNING: could not connect to Supabase (%v) — falling back to local DB only", err)
+		} else {
+			log.Println("Dual-source mode: fetching leads from local SQLite + Supabase")
+			store = leadsmanager.NewCombinedDB(localDB, supDB)
+		}
+	} else {
+		log.Println("Single-source mode: fetching leads from local SQLite only (set DATABASE_URL for Supabase)")
+	}
+
+	mgr, err := leadsmanager.NewManager(store, llmProvider, llmAPIKey, llmModel, ollamaURL)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create manager: %v\n", err)
 		os.Exit(1)

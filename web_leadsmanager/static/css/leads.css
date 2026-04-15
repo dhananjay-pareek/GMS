@@ -1112,8 +1112,33 @@ a.lc-meta-item.lead-website:hover {
         white-space: nowrap;
     }
 
+    /* Stats: compact horizontal scroll strip on mobile */
     .stats-row {
-        grid-template-columns: repeat(2, 1fr);
+        display: flex;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        gap: 0.5rem;
+        padding-bottom: 0.25rem;
+        grid-template-columns: unset;
+    }
+
+    .stat-card {
+        flex: 0 0 auto;
+        min-width: 100px;
+        padding: 0.5rem 0.75rem;
+        border-radius: var(--radius-sm);
+        gap: 0.1rem;
+    }
+
+    .stat-value {
+        font-size: 1.25rem;
+        line-height: 1.2;
+    }
+
+    .stat-label {
+        font-size: 0.62rem;
+        letter-spacing: 0.03em;
     }
 
     .lead-card {
@@ -1165,11 +1190,5 @@ a.lc-meta-item.lead-website:hover {
     .btn-action-label .btn-icon {
         font-size: 1.1rem;
         margin: 0 auto;
-    }
-}
-
-@media (max-width: 480px) {
-    .stats-row {
-        grid-template-columns: 1fr;
     }
 }

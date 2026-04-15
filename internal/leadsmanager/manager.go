@@ -14,7 +14,7 @@ import (
 
 // Manager coordinates the leads pipeline and database operations.
 type Manager struct {
-	db          *DB
+	db          LeadStore
 	enricher    *Enricher
 	llmProvider string
 	llmAPIKey   string
@@ -23,7 +23,7 @@ type Manager struct {
 }
 
 // NewManager creates a new Manager instance.
-func NewManager(db *DB, llmProvider, llmAPIKey, llmModel, ollamaURL string) (*Manager, error) {
+func NewManager(db LeadStore, llmProvider, llmAPIKey, llmModel, ollamaURL string) (*Manager, error) {
 	enricher, err := NewEnricher(db)
 	if err != nil {
 		return nil, fmt.Errorf("init enricher: %w", err)
@@ -47,7 +47,7 @@ func NewManager(db *DB, llmProvider, llmAPIKey, llmModel, ollamaURL string) (*Ma
 }
 
 // DB returns the database instance for direct queries.
-func (m *Manager) DB() *DB {
+func (m *Manager) DB() LeadStore {
 	return m.db
 }
 

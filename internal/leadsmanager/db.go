@@ -65,6 +65,21 @@ type LeadFilter struct {
 	MinRating float64
 }
 
+// LeadStore is the read/write interface implemented by *DB (SQLite),
+// *SupabaseDB (Postgres), and *CombinedDB.
+type LeadStore interface {
+	FetchLeads(ctx context.Context, filter LeadFilter, page, pageSize int) ([]Lead, int, error)
+	GetLead(ctx context.Context, placeID string) (*Lead, error)
+	GetStats(ctx context.Context) (*DashboardStats, error)
+	GetCompetitors(ctx context.Context, city string, minRating float64) ([]Lead, error)
+	GetCompetitorsByCategory(ctx context.Context, city, category, excludePlaceID string, minRating float64) ([]Lead, error)
+	UpsertLeads(ctx context.Context, leads []Lead) error
+	UpdateTechStack(ctx context.Context, placeID string, techs []string) error
+	UpdatePageSpeedScore(ctx context.Context, placeID string, score int) error
+	UpdateEmails(ctx context.Context, placeID string, emails []string, isValid bool) error
+	Close()
+}
+
 type DB struct {
 	pool *sql.DB
 }
