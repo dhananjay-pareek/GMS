@@ -8,6 +8,8 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -86,10 +88,7 @@ func (e *Enricher) DetectTechStack(ctx context.Context, placeID string) ([]strin
 	}
 
 	// Update in DB
-	_, execErr := e.db.pool.Exec(ctx,
-		"UPDATE gmaps_leads SET tech_stack = $1 WHERE place_id = $2",
-		techs, placeID,
-	)
+	execErr := e.db.UpdateTechStack(ctx, placeID, techs)
 	if execErr != nil {
 		return techs, fmt.Errorf("saved techs but failed db update: %w", execErr)
 	}
@@ -118,29 +117,64 @@ func (e *Enricher) RunPageSpeed(ctx context.Context, placeID string) (*PageSpeed
 		return nil, fmt.Errorf("lead has no website")
 	}
 
-	url := lead.Website
-	if !strings.HasPrefix(url, "http") {
-		url = "https://" + url
+	websiteURL := strings.TrimSpace(lead.Website)
+	if !strings.HasPrefix(websiteURL, "http") {
+		websiteURL = "https://" + websiteURL
 	}
 
-	apiURL := fmt.Sprintf(
-		"https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=%s&strategy=mobile",
-		url,
+	values := url.Values{}
+	values.Set("url", websiteURL)
+	values.Set("strategy", "mobile")
+
+	// Optional API key improves reliability and quota.
+	if apiKey := strings.TrimSpace(os.Getenv("PAGESPEED_API_KEY")); apiKey != "" {
+		values.Set("key", apiKey)
+	}
+
+	apiURL := "https://www.googleapis.com/pagespeedonline/v5/runPagespeed?" + values.Encode()
+
+	pagespeedClient := &http.Client{Timeout: 45 * time.Second}
+
+	var (
+		resp        *http.Response
+		bodyPreview string
+		lastErr     error
 	)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
-	if err != nil {
-		return nil, err
-	}
+	for attempt := 1; attempt <= 2; attempt++ {
+		req, reqErr := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+		if reqErr != nil {
+			return nil, reqErr
+		}
 
-	resp, err := e.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("pagespeed api: %w", err)
+		resp, lastErr = pagespeedClient.Do(req)
+		if lastErr != nil {
+			// One retry for transient network/timeout failures.
+			if attempt < 2 {
+				time.Sleep(2 * time.Second)
+				continue
+			}
+			return nil, fmt.Errorf("pagespeed api: %w", lastErr)
+		}
+
+		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= http.StatusInternalServerError {
+			body, _ := io.ReadAll(io.LimitReader(resp.Body, 8192))
+			bodyPreview = strings.TrimSpace(string(body))
+			resp.Body.Close()
+			if attempt < 2 {
+				time.Sleep(2 * time.Second)
+				continue
+			}
+			return nil, fmt.Errorf("pagespeed api returned %d: %s", resp.StatusCode, bodyPreview)
+		}
+
+		break
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("pagespeed api returned %d", resp.StatusCode)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 8192))
+		return nil, fmt.Errorf("pagespeed api returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
 	var raw map[string]any
@@ -169,10 +203,7 @@ func (e *Enricher) RunPageSpeed(ctx context.Context, placeID string) (*PageSpeed
 	}
 
 	// Save score to DB
-	_, execErr := e.db.pool.Exec(ctx,
-		"UPDATE gmaps_leads SET page_speed_score = $1 WHERE place_id = $2",
-		result.Score, placeID,
-	)
+	execErr := e.db.UpdatePageSpeedScore(ctx, placeID, result.Score)
 	if execErr != nil {
 		return result, fmt.Errorf("saved score but failed db update: %w", execErr)
 	}
@@ -311,10 +342,7 @@ func (e *Enricher) ExtractContacts(ctx context.Context, placeID string) (*Contac
 			}
 		}
 
-		_, _ = e.db.pool.Exec(ctx,
-			"UPDATE gmaps_leads SET emails = $1, is_email_valid = $2 WHERE place_id = $3",
-			result.Emails, hasValid, placeID,
-		)
+		_ = e.db.UpdateEmails(ctx, placeID, result.Emails, hasValid)
 	}
 
 	return result, nil
@@ -611,7 +639,7 @@ func (e *Enricher) callOpenAICompatible(ctx context.Context, prompt, apiKey, pro
 		} else {
 			url = "http://localhost:11434/v1/chat/completions"
 		}
-		model = "llama3"
+		model = "qwen3-coder:480b-cloud"
 	default:
 		return "", fmt.Errorf("unsupported provider: %s", provider)
 	}

@@ -13,7 +13,14 @@
     <header class="top-bar">
         <div class="top-bar-inner">
             <h1 class="logo">Rankernet's <span>LeadsPilot</span></h1>
+            
+            <input type="checkbox" id="nav-toggle" class="nav-toggle-checkbox sr-only">
+            <label for="nav-toggle" class="nav-toggle-label">
+                <span class="hamburger-icon">☰</span>
+            </label>
+
             <nav class="top-nav">
+                <a class="nav-link" href="{{.ScraperURL}}" target="_blank" rel="noopener noreferrer">Open Scraper</a>
                 <label for="llm-provider" class="sr-only">LLM Provider</label>
                 <select id="llm-provider" class="nav-select" aria-label="Select LLM Provider">
                     <option value="gemini">Gemini (Google)</option>
@@ -29,9 +36,9 @@
                     <option value="ollama">Ollama (Local URL)</option>
                 </select>
                 <label for="llm-api-key" class="sr-only">API Key</label>
-                <input type="password" id="llm-api-key" class="nav-input nav-input-wide" placeholder="Enter API Key or Host URL" aria-label="API Key or Host URL">
+                <input type="password" id="llm-api-key" class="nav-input nav-input-wide" placeholder="Enter API Key or Host URL" aria-label="API Key or Host URL" value="{{.LLMAPIKey}}">
                 <label for="llm-model" class="sr-only">Model Name</label>
-                <input type="text" id="llm-model" class="nav-input" placeholder="Model (Optional)" aria-label="Model Name">
+                <input type="text" id="llm-model" class="nav-input" placeholder="Model (Optional)" aria-label="Model Name" value="{{.LLMModel}}">
             </nav>
         </div>
     </header>
@@ -152,6 +159,15 @@
             htmx.ajax('GET', '/lead-rows', { target: '#leads-tbody', swap: 'innerHTML' });
         }
 
+        const appLLMProvider = '{{.LLMProvider}}';
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const provider = document.getElementById('llm-provider');
+            if (appLLMProvider) {
+                provider.value = appLLMProvider;
+            }
+        });
+
         // On-demand enrichment actions
         async function runAction(action, placeId, btn) {
             const originalText = btn.textContent;
@@ -172,8 +188,9 @@
                     const apiKey = document.getElementById('llm-api-key').value;
                     const provider = document.getElementById('llm-provider').value;
                     const modelName = document.getElementById('llm-model').value;
+                    url += `&provider=${encodeURIComponent(provider)}`;
                     if (apiKey) {
-                        url += `&api_key=${encodeURIComponent(apiKey)}&provider=${encodeURIComponent(provider)}`;
+                        url += `&api_key=${encodeURIComponent(apiKey)}`;
                     }
                     if (modelName) {
                         url += `&model=${encodeURIComponent(modelName)}`;

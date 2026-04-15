@@ -81,7 +81,7 @@ services:
     envVars:
       # Render dynamically sets PORT=9090 based on Dockerfile
       # IMPORTANT: You must add these manually via the Render dashboard
-      - key: SUPABASE_DB_URL
+      - key: LEADS_DB_PATH
         sync: false
       - key: GEMINI_API_KEY
         sync: false

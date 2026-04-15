@@ -1,4 +1,4 @@
-package webrunner
+package filerunner
 
 import (
 	"context"
@@ -29,7 +29,7 @@ func (m *multiWriter) Run(ctx context.Context, in <-chan scrapemate.Result) erro
 		for _, ch := range chans {
 			select {
 			case <-ctx.Done():
-				return ctx.Err()
+				break
 			case ch <- result:
 			}
 		}

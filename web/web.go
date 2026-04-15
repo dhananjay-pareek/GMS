@@ -24,15 +24,43 @@ import (
 var static embed.FS
 
 type Server struct {
-	tmpl map[string]*template.Template
-	srv  *http.Server
-	svc  *Service
+	tmpl        map[string]*template.Template
+	srv         *http.Server
+	svc         *Service
+	leadsURL    string
+	llmProvider string
+	llmAPIKey   string
+	llmModel    string
+	ollamaURL   string
 }
 
-func New(svc *Service, addr string) (*Server, error) {
+func New(
+	svc *Service,
+	addr,
+	leadsURL,
+	llmProvider,
+	llmAPIKey,
+	llmModel,
+	ollamaURL string,
+) (*Server, error) {
+	if leadsURL == "" {
+		leadsURL = "http://localhost:9090"
+	}
+	if llmProvider == "" {
+		llmProvider = "ollama"
+	}
+	if ollamaURL == "" {
+		ollamaURL = "http://localhost:11434"
+	}
+
 	ans := Server{
-		svc:  svc,
-		tmpl: make(map[string]*template.Template),
+		svc:         svc,
+		tmpl:        make(map[string]*template.Template),
+		leadsURL:    leadsURL,
+		llmProvider: llmProvider,
+		llmAPIKey:   llmAPIKey,
+		llmModel:    llmModel,
+		ollamaURL:   ollamaURL,
 		srv: &http.Server{
 			Addr:              addr,
 			ReadHeaderTimeout: 10 * time.Second,
@@ -181,7 +209,10 @@ type formData struct {
 	Depth         int
 	Email         bool
 	Proxies       []string
-	GoogleSheetID string
+	LeadsURL      string
+	LLMProvider   string
+	LLMAPIKey     string
+	LLMModel      string
 }
 
 type ctxKey string
@@ -244,7 +275,16 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 		Lon:           "0",
 		Depth:         10,
 		Email:         false,
-		GoogleSheetID: os.Getenv("GOOGLE_SHEET_ID"),
+		LeadsURL:      s.leadsURL,
+		LLMProvider:   s.llmProvider,
+		LLMAPIKey: func() string {
+			if s.llmProvider == "ollama" && s.llmAPIKey == "" {
+				return s.ollamaURL
+			}
+
+			return s.llmAPIKey
+		}(),
+		LLMModel: s.llmModel,
 	}
 
 	_ = tmpl.Execute(w, data)
@@ -337,8 +377,6 @@ func (s *Server) scrape(w http.ResponseWriter, r *http.Request) {
 	}
 
 	newJob.Data.Email = r.Form.Get("email") == "on"
-
-	newJob.Data.GoogleSheetID = strings.TrimSpace(r.Form.Get("google_sheet_id"))
 
 	proxies := strings.Split(r.Form.Get("proxies"), "\n")
 	if len(proxies) > 0 {
@@ -672,7 +710,7 @@ func securityHeaders(next http.Handler) http.Handler {
 				"style-src 'self' 'unsafe-inline' fonts.googleapis.com unpkg.com; "+
 				"img-src 'self' data: cdn.redoc.ly *.tile.openstreetmap.org unpkg.com; "+
 				"font-src 'self' fonts.gstatic.com; "+
-				"connect-src 'self' nominatim.openstreetmap.org unpkg.com generativelanguage.googleapis.com api.openai.com api.anthropic.com api.cohere.ai api.mistral.ai api.groq.com api.together.xyz api.replicate.com api-inference.huggingface.co api.perplexity.ai")
+				"connect-src 'self' nominatim.openstreetmap.org unpkg.com generativelanguage.googleapis.com api.openai.com api.anthropic.com api.cohere.ai api.mistral.ai api.groq.com api.together.xyz api.replicate.com api-inference.huggingface.co api.perplexity.ai localhost:11434 127.0.0.1:11434")
 
 		next.ServeHTTP(w, r)
 	})
@@ -705,11 +743,6 @@ func (s *Server) apiGenerateKeywords(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.APIKey == "" {
-		renderJSON(w, http.StatusBadRequest, generateKeywordsResponse{Error: "API key is required"})
-		return
-	}
-
 	if req.JobName == "" && req.Location == "" {
 		renderJSON(w, http.StatusBadRequest, generateKeywordsResponse{Error: "Job name or location is required"})
 		return
@@ -717,7 +750,30 @@ func (s *Server) apiGenerateKeywords(w http.ResponseWriter, r *http.Request) {
 
 	prompt := buildKeywordPrompt(req.JobName, req.Location)
 
-	result, err := callLLM(req.Provider, req.APIKey, req.Model, prompt)
+	provider := strings.TrimSpace(req.Provider)
+	if provider == "" {
+		provider = s.llmProvider
+	}
+
+	apiKey := strings.TrimSpace(req.APIKey)
+	if apiKey == "" {
+		apiKey = s.llmAPIKey
+	}
+	if provider == "ollama" && apiKey == "" {
+		apiKey = s.ollamaURL
+	}
+
+	model := strings.TrimSpace(req.Model)
+	if model == "" {
+		model = s.llmModel
+	}
+
+	if provider != "ollama" && apiKey == "" {
+		renderJSON(w, http.StatusBadRequest, generateKeywordsResponse{Error: "API key is required"})
+		return
+	}
+
+	result, err := callLLM(provider, apiKey, model, prompt)
 	if err != nil {
 		log.Printf("LLM call failed: %v", err)
 		renderJSON(w, http.StatusInternalServerError, generateKeywordsResponse{Error: err.Error()})
@@ -792,7 +848,7 @@ func callLLM(provider, apiKey, model, prompt string) (string, error) {
 	case "ollama":
 		host := apiKey // for Ollama, "api_key" field holds the host URL
 		if model == "" {
-			model = "llama3"
+			model = "qwen3-coder:480b-cloud"
 		}
 		return callOllama(host, model, prompt)
 	default:

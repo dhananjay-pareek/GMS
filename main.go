@@ -14,6 +14,8 @@ import (
 	"github.com/gosom/google-maps-scraper/runner/filerunner"
 	"github.com/gosom/google-maps-scraper/runner/installplaywright"
 	"github.com/gosom/google-maps-scraper/runner/lambdaaws"
+	"github.com/gosom/google-maps-scraper/runner/leadsmanagerrunner"
+	"github.com/gosom/google-maps-scraper/runner/webandleadsrunner"
 	"github.com/gosom/google-maps-scraper/runner/webrunner"
 	"github.com/joho/godotenv"
 )
@@ -37,7 +39,7 @@ func main() {
 
 	cfg := runner.ParseConfig()
 
-	runnerInstance, err := runnerFactory(cfg)
+	runnerInstance, err := runnerFactory(ctx, cfg)
 	if err != nil {
 		cancel()
 		os.Stderr.WriteString(err.Error() + "\n")
@@ -66,7 +68,7 @@ func main() {
 	os.Exit(0)
 }
 
-func runnerFactory(cfg *runner.Config) (runner.Runner, error) {
+func runnerFactory(ctx context.Context, cfg *runner.Config) (runner.Runner, error) {
 	switch cfg.RunMode {
 	case runner.RunModeFile:
 		return filerunner.New(cfg)
@@ -76,6 +78,10 @@ func runnerFactory(cfg *runner.Config) (runner.Runner, error) {
 		return installplaywright.New(cfg)
 	case runner.RunModeWeb:
 		return webrunner.New(cfg)
+	case runner.RunModeLeadsManager:
+		return leadsmanagerrunner.New(ctx, cfg)
+	case runner.RunModeWebAndLeadsManager:
+		return webandleadsrunner.New(ctx, cfg)
 	case runner.RunModeAwsLambda:
 		return lambdaaws.New(cfg)
 	case runner.RunModeAwsLambdaInvoker:

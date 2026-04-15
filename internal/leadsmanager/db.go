@@ -2,484 +2,645 @@ package leadsmanager
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+	_ "modernc.org/sqlite"
 )
 
-// Lead represents a Google Maps business lead stored in Supabase.
 type Lead struct {
-	PlaceID      string   `json:"place_id"`
-	Title        string   `json:"title"`
-	Category     string   `json:"category"`
-	Categories   []string `json:"categories"`
-	Address      string   `json:"address"`
-	City         string   `json:"city"`
-	State        string   `json:"state"`
-	Country      string   `json:"country"`
-	PostalCode   string   `json:"postal_code"`
-	Phone        string   `json:"phone"`
-	Emails       []string `json:"emails"`
-	Website      string   `json:"website"`
-	ReviewCount  int      `json:"review_count"`
-	ReviewRating float64  `json:"review_rating"`
-	Latitude     float64  `json:"latitude"`
-	Longitude    float64  `json:"longitude"`
-	GmapsLink    string   `json:"gmaps_link"`
-	Cid          string   `json:"cid"`
-	Status       string   `json:"status"`
-	Description  string   `json:"description"`
-	OwnerName    string   `json:"owner_name"`
-	OwnerID      string   `json:"owner_id"`
-	Thumbnail    string   `json:"thumbnail"`
-	Timezone     string   `json:"timezone"`
-	PriceRange   string   `json:"price_range"`
-	PlusCode     string   `json:"plus_code"`
-
-	// Enrichment fields
-	IsEmailValid     bool     `json:"is_email_valid"`
-	IsPhoneValid     bool     `json:"is_phone_valid"`
-	HasSSL           *bool    `json:"has_ssl"`
-	HasAnalytics     *bool    `json:"has_analytics"`
-	HasFacebookPixel *bool    `json:"has_facebook_pixel"`
-	HasH1            *bool    `json:"has_h1"`
-	HasMetaDesc      *bool    `json:"has_meta_desc"`
-	PageSpeedScore   *int     `json:"page_speed_score"`
-	TechStack        []string `json:"tech_stack"`
-	SocialLinks      string   `json:"social_links"`
-	ServiceTags      []string `json:"service_tags"`
-	GmbClaimed       bool     `json:"gmb_claimed"`
-
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	PlaceID          string    `json:"place_id"`
+	Title            string    `json:"title"`
+	Category         string    `json:"category"`
+	Categories       []string  `json:"categories"`
+	Address          string    `json:"address"`
+	City             string    `json:"city"`
+	State            string    `json:"state"`
+	Country          string    `json:"country"`
+	PostalCode       string    `json:"postal_code"`
+	Phone            string    `json:"phone"`
+	Emails           []string  `json:"emails"`
+	Website          string    `json:"website"`
+	ReviewCount      int       `json:"review_count"`
+	ReviewRating     float64   `json:"review_rating"`
+	Latitude         float64   `json:"latitude"`
+	Longitude        float64   `json:"longitude"`
+	GmapsLink        string    `json:"gmaps_link"`
+	Cid              string    `json:"cid"`
+	Status           string    `json:"status"`
+	Description      string    `json:"description"`
+	ServiceTags      []string  `json:"service_tags"`
+	IsEmailValid     bool      `json:"is_email_valid"`
+	IsPhoneValid     bool      `json:"is_phone_valid"`
+	GmbClaimed       bool      `json:"gmb_claimed"`
+	HasSSL           *bool     `json:"has_ssl"`
+	HasAnalytics     *bool     `json:"has_analytics"`
+	HasFacebookPixel *bool     `json:"has_facebook_pixel"`
+	HasH1            *bool     `json:"has_h1"`
+	HasMetaDesc      *bool     `json:"has_meta_desc"`
+	PageSpeedScore   *int      `json:"page_speed_score"`
+	TechStack        []string  `json:"tech_stack"`
+	SocialLinks      string    `json:"social_links"`
+	OwnerName        string    `json:"owner_name"`
+	OwnerID          string    `json:"owner_id"`
+	Thumbnail        string    `json:"thumbnail"`
+	Timezone         string    `json:"timezone"`
+	PriceRange       string    `json:"price_range"`
+	PlusCode         string    `json:"plus_code"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }
 
-// LeadFilter holds query parameters for filtering leads.
 type LeadFilter struct {
-	Search    string  `json:"search"`
-	City      string  `json:"city"`
-	Category  string  `json:"category"`
-	Tag       string  `json:"tag"`
-	MinRating float64 `json:"min_rating"`
+	Search    string
+	City      string
+	Category  string
+	Tag       string
+	MinRating float64
 }
 
-// DB wraps a pgxpool connection to Supabase PostgreSQL.
 type DB struct {
-	pool *pgxpool.Pool
+	pool *sql.DB
 }
 
-// NewDB creates a new database connection pool.
-func NewDB(ctx context.Context, connStr string) (*DB, error) {
-	config, err := pgxpool.ParseConfig(connStr)
-	if err != nil {
-		return nil, fmt.Errorf("parse db config: %w", err)
+const (
+	EnvLeadsDBPath = "LEADS_DB_PATH"
+)
+
+func ResolveDBPath(dbPath string) string {
+	if strings.TrimSpace(dbPath) != "" {
+		return dbPath
 	}
 
-	config.MaxConns = 10
-	config.MinConns = 2
-
-	pool, err := pgxpool.NewWithConfig(ctx, config)
-	if err != nil {
-		return nil, fmt.Errorf("connect to db: %w", err)
+	if envPath := strings.TrimSpace(os.Getenv(EnvLeadsDBPath)); envPath != "" {
+		return envPath
 	}
 
-	if err := pool.Ping(ctx); err != nil {
+	return filepath.Join("webdata", "leadsmanager.db")
+}
+
+func NewDB(ctx context.Context, dbPath string) (*DB, error) {
+	dbPath = ResolveDBPath(dbPath)
+
+	if err := os.MkdirAll(filepath.Dir(dbPath), os.ModePerm); err != nil {
+		return nil, fmt.Errorf("create leads db directory: %w", err)
+	}
+
+	pool, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		return nil, fmt.Errorf("open leads db: %w", err)
+	}
+
+	if _, err := pool.ExecContext(ctx, "PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA busy_timeout = 5000;"); err != nil {
 		pool.Close()
-		return nil, fmt.Errorf("ping db: %w", err)
+		return nil, fmt.Errorf("enable sqlite pragmas: %w", err)
 	}
 
-	return &DB{pool: pool}, nil
+	db := &DB{pool: pool}
+	if err := db.initSchema(ctx); err != nil {
+		pool.Close()
+		return nil, err
+	}
+
+	return db, nil
 }
 
-// Close closes the database pool.
 func (db *DB) Close() {
-	db.pool.Close()
-}
-
-// UpsertLead inserts or updates a lead by place_id.
-func (db *DB) UpsertLead(ctx context.Context, l *Lead) error {
-	query := `
-		INSERT INTO gmaps_leads (
-			place_id, title, category, categories, address, city, state, country, postal_code,
-			phone, emails, website, review_count, review_rating, latitude, longitude,
-			gmaps_link, cid, status, description, owner_name, owner_id, thumbnail,
-			timezone, price_range, plus_code,
-			is_email_valid, is_phone_valid, has_ssl, has_analytics, has_facebook_pixel,
-			has_h1, has_meta_desc, page_speed_score, tech_stack, social_links,
-			service_tags, gmb_claimed
-		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9,
-			$10, $11, $12, $13, $14, $15, $16,
-			$17, $18, $19, $20, $21, $22, $23,
-			$24, $25, $26,
-			$27, $28, $29, $30, $31,
-			$32, $33, $34, $35, $36,
-			$37, $38
-		)
-		ON CONFLICT (place_id) DO UPDATE SET
-			title = EXCLUDED.title,
-			category = EXCLUDED.category,
-			categories = EXCLUDED.categories,
-			address = EXCLUDED.address,
-			city = EXCLUDED.city,
-			state = EXCLUDED.state,
-			country = EXCLUDED.country,
-			postal_code = EXCLUDED.postal_code,
-			phone = EXCLUDED.phone,
-			emails = EXCLUDED.emails,
-			website = EXCLUDED.website,
-			review_count = EXCLUDED.review_count,
-			review_rating = EXCLUDED.review_rating,
-			latitude = EXCLUDED.latitude,
-			longitude = EXCLUDED.longitude,
-			gmaps_link = EXCLUDED.gmaps_link,
-			cid = EXCLUDED.cid,
-			status = EXCLUDED.status,
-			description = EXCLUDED.description,
-			owner_name = EXCLUDED.owner_name,
-			owner_id = EXCLUDED.owner_id,
-			thumbnail = EXCLUDED.thumbnail,
-			timezone = EXCLUDED.timezone,
-			price_range = EXCLUDED.price_range,
-			plus_code = EXCLUDED.plus_code,
-			is_email_valid = EXCLUDED.is_email_valid,
-			is_phone_valid = EXCLUDED.is_phone_valid,
-			has_ssl = EXCLUDED.has_ssl,
-			has_analytics = EXCLUDED.has_analytics,
-			has_facebook_pixel = EXCLUDED.has_facebook_pixel,
-			has_h1 = EXCLUDED.has_h1,
-			has_meta_desc = EXCLUDED.has_meta_desc,
-			page_speed_score = EXCLUDED.page_speed_score,
-			tech_stack = EXCLUDED.tech_stack,
-			social_links = EXCLUDED.social_links,
-			service_tags = EXCLUDED.service_tags,
-			gmb_claimed = EXCLUDED.gmb_claimed
-	`
-
-	socialLinks := l.SocialLinks
-	if socialLinks == "" {
-		socialLinks = "{}"
+	if db != nil && db.pool != nil {
+		_ = db.pool.Close()
 	}
-
-	_, err := db.pool.Exec(ctx, query,
-		l.PlaceID, l.Title, l.Category, l.Categories, l.Address, l.City, l.State, l.Country, l.PostalCode,
-		l.Phone, l.Emails, l.Website, l.ReviewCount, l.ReviewRating, l.Latitude, l.Longitude,
-		l.GmapsLink, l.Cid, l.Status, l.Description, l.OwnerName, l.OwnerID, l.Thumbnail,
-		l.Timezone, l.PriceRange, l.PlusCode,
-		l.IsEmailValid, l.IsPhoneValid, l.HasSSL, l.HasAnalytics, l.HasFacebookPixel,
-		l.HasH1, l.HasMetaDesc, l.PageSpeedScore, l.TechStack, socialLinks,
-		l.ServiceTags, l.GmbClaimed,
-	)
-
-	return err
 }
 
-// BulkUpsertLeads batch-inserts or updates multiple leads in a single transaction.
-// This is much faster than individual upserts.
+func (db *DB) initSchema(ctx context.Context) error {
+	const schema = `
+CREATE TABLE IF NOT EXISTS gmaps_leads (
+  place_id TEXT PRIMARY KEY,
+  title TEXT NOT NULL DEFAULT '',
+  category TEXT NOT NULL DEFAULT '',
+  categories_json TEXT NOT NULL DEFAULT '[]',
+  address TEXT NOT NULL DEFAULT '',
+  city TEXT NOT NULL DEFAULT '',
+  state TEXT NOT NULL DEFAULT '',
+  country TEXT NOT NULL DEFAULT '',
+  postal_code TEXT NOT NULL DEFAULT '',
+  phone TEXT NOT NULL DEFAULT '',
+  emails_json TEXT NOT NULL DEFAULT '[]',
+  website TEXT NOT NULL DEFAULT '',
+  review_count INTEGER NOT NULL DEFAULT 0,
+  review_rating REAL NOT NULL DEFAULT 0,
+  latitude REAL NOT NULL DEFAULT 0,
+  longitude REAL NOT NULL DEFAULT 0,
+  gmaps_link TEXT NOT NULL DEFAULT '',
+  cid TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT '',
+  description TEXT NOT NULL DEFAULT '',
+  service_tags_json TEXT NOT NULL DEFAULT '[]',
+  is_email_valid INTEGER NOT NULL DEFAULT 0,
+  is_phone_valid INTEGER NOT NULL DEFAULT 0,
+  gmb_claimed INTEGER NOT NULL DEFAULT 0,
+  has_ssl INTEGER NULL,
+  has_analytics INTEGER NULL,
+  has_facebook_pixel INTEGER NULL,
+  has_h1 INTEGER NULL,
+  has_meta_desc INTEGER NULL,
+  page_speed_score INTEGER NULL,
+  tech_stack_json TEXT NOT NULL DEFAULT '[]',
+  social_links TEXT NOT NULL DEFAULT '{}',
+  owner_name TEXT NOT NULL DEFAULT '',
+  owner_id TEXT NOT NULL DEFAULT '',
+  thumbnail TEXT NOT NULL DEFAULT '',
+  timezone TEXT NOT NULL DEFAULT '',
+  price_range TEXT NOT NULL DEFAULT '',
+  plus_code TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_gmaps_leads_city ON gmaps_leads(city);
+CREATE INDEX IF NOT EXISTS idx_gmaps_leads_category ON gmaps_leads(category);
+CREATE INDEX IF NOT EXISTS idx_gmaps_leads_rating ON gmaps_leads(review_rating);
+`
+	_, err := db.pool.ExecContext(ctx, schema)
+	if err != nil {
+		return fmt.Errorf("init leads schema: %w", err)
+	}
+	return nil
+}
+
 func (db *DB) BulkUpsertLeads(ctx context.Context, leads []Lead) (int, error) {
 	if len(leads) == 0 {
 		return 0, nil
 	}
 
-	batch := &pgx.Batch{}
-
-	query := `
-		INSERT INTO gmaps_leads (
-			place_id, title, category, categories, address, city, state, country, postal_code,
-			phone, emails, website, review_count, review_rating, latitude, longitude,
-			gmaps_link, cid, status, description, owner_name, owner_id, thumbnail,
-			timezone, price_range, plus_code,
-			is_email_valid, is_phone_valid, has_ssl, has_analytics, has_facebook_pixel,
-			has_h1, has_meta_desc, page_speed_score, tech_stack, social_links,
-			service_tags, gmb_claimed
-		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9,
-			$10, $11, $12, $13, $14, $15, $16,
-			$17, $18, $19, $20, $21, $22, $23,
-			$24, $25, $26,
-			$27, $28, $29, $30, $31,
-			$32, $33, $34, $35, $36,
-			$37, $38
-		)
-		ON CONFLICT (place_id) DO UPDATE SET
-			title = EXCLUDED.title,
-			category = EXCLUDED.category,
-			categories = EXCLUDED.categories,
-			address = EXCLUDED.address,
-			city = EXCLUDED.city,
-			state = EXCLUDED.state,
-			country = EXCLUDED.country,
-			postal_code = EXCLUDED.postal_code,
-			phone = EXCLUDED.phone,
-			emails = EXCLUDED.emails,
-			website = EXCLUDED.website,
-			review_count = EXCLUDED.review_count,
-			review_rating = EXCLUDED.review_rating,
-			latitude = EXCLUDED.latitude,
-			longitude = EXCLUDED.longitude,
-			gmaps_link = EXCLUDED.gmaps_link,
-			cid = EXCLUDED.cid,
-			status = EXCLUDED.status,
-			description = EXCLUDED.description,
-			owner_name = EXCLUDED.owner_name,
-			owner_id = EXCLUDED.owner_id,
-			thumbnail = EXCLUDED.thumbnail,
-			timezone = EXCLUDED.timezone,
-			price_range = EXCLUDED.price_range,
-			plus_code = EXCLUDED.plus_code,
-			is_email_valid = EXCLUDED.is_email_valid,
-			is_phone_valid = EXCLUDED.is_phone_valid,
-			has_ssl = EXCLUDED.has_ssl,
-			has_analytics = EXCLUDED.has_analytics,
-			has_facebook_pixel = EXCLUDED.has_facebook_pixel,
-			has_h1 = EXCLUDED.has_h1,
-			has_meta_desc = EXCLUDED.has_meta_desc,
-			page_speed_score = EXCLUDED.page_speed_score,
-			tech_stack = EXCLUDED.tech_stack,
-			social_links = EXCLUDED.social_links,
-			service_tags = EXCLUDED.service_tags,
-			gmb_claimed = EXCLUDED.gmb_claimed
-	`
-
-	for _, l := range leads {
-		socialLinks := l.SocialLinks
-		if socialLinks == "" {
-			socialLinks = "{}"
-		}
-
-		batch.Queue(query,
-			l.PlaceID, l.Title, l.Category, l.Categories, l.Address, l.City, l.State, l.Country, l.PostalCode,
-			l.Phone, l.Emails, l.Website, l.ReviewCount, l.ReviewRating, l.Latitude, l.Longitude,
-			l.GmapsLink, l.Cid, l.Status, l.Description, l.OwnerName, l.OwnerID, l.Thumbnail,
-			l.Timezone, l.PriceRange, l.PlusCode,
-			l.IsEmailValid, l.IsPhoneValid, l.HasSSL, l.HasAnalytics, l.HasFacebookPixel,
-			l.HasH1, l.HasMetaDesc, l.PageSpeedScore, l.TechStack, socialLinks,
-			l.ServiceTags, l.GmbClaimed,
-		)
+	tx, err := db.pool.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
 	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
-	br := db.pool.SendBatch(ctx, batch)
-	defer br.Close()
+	const query = `
+INSERT INTO gmaps_leads (
+  place_id, title, category, categories_json, address, city, state, country, postal_code,
+  phone, emails_json, website, review_count, review_rating, latitude, longitude, gmaps_link,
+  cid, status, description, service_tags_json, is_email_valid, is_phone_valid, gmb_claimed,
+  has_ssl, has_analytics, has_facebook_pixel, has_h1, has_meta_desc, page_speed_score,
+  tech_stack_json, social_links, owner_name, owner_id, thumbnail, timezone, price_range,
+  plus_code, created_at, updated_at
+) VALUES (
+  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+)
+ON CONFLICT(place_id) DO UPDATE SET
+  title = excluded.title,
+  category = excluded.category,
+  categories_json = excluded.categories_json,
+  address = excluded.address,
+  city = excluded.city,
+  state = excluded.state,
+  country = excluded.country,
+  postal_code = excluded.postal_code,
+  phone = excluded.phone,
+  emails_json = excluded.emails_json,
+  website = excluded.website,
+  review_count = excluded.review_count,
+  review_rating = excluded.review_rating,
+  latitude = excluded.latitude,
+  longitude = excluded.longitude,
+  gmaps_link = excluded.gmaps_link,
+  cid = excluded.cid,
+  status = excluded.status,
+  description = excluded.description,
+  service_tags_json = excluded.service_tags_json,
+  is_email_valid = excluded.is_email_valid,
+  is_phone_valid = excluded.is_phone_valid,
+  gmb_claimed = excluded.gmb_claimed,
+  has_ssl = excluded.has_ssl,
+  has_analytics = excluded.has_analytics,
+  has_facebook_pixel = excluded.has_facebook_pixel,
+  has_h1 = excluded.has_h1,
+  has_meta_desc = excluded.has_meta_desc,
+  page_speed_score = excluded.page_speed_score,
+  tech_stack_json = excluded.tech_stack_json,
+  social_links = excluded.social_links,
+  owner_name = excluded.owner_name,
+  owner_id = excluded.owner_id,
+  thumbnail = excluded.thumbnail,
+  timezone = excluded.timezone,
+  price_range = excluded.price_range,
+  plus_code = excluded.plus_code,
+  created_at = COALESCE(gmaps_leads.created_at, excluded.created_at),
+  updated_at = excluded.updated_at;
+`
+
+	stmt, err := tx.PrepareContext(ctx, query)
+	if err != nil {
+		return 0, err
+	}
+	defer stmt.Close()
 
 	successCount := 0
-	for i := 0; i < len(leads); i++ {
-		_, err := br.Exec()
+	for _, lead := range leads {
+		now := time.Now().UTC()
+		if lead.CreatedAt.IsZero() {
+			lead.CreatedAt = now
+		}
+		lead.UpdatedAt = now
+		if lead.Categories == nil {
+			lead.Categories = []string{}
+		}
+		if lead.Emails == nil {
+			lead.Emails = []string{}
+		}
+		if lead.ServiceTags == nil {
+			lead.ServiceTags = []string{}
+		}
+		if lead.TechStack == nil {
+			lead.TechStack = []string{}
+		}
+		if lead.SocialLinks == "" {
+			lead.SocialLinks = "{}"
+		}
+
+		_, err = stmt.ExecContext(ctx,
+			lead.PlaceID,
+			lead.Title,
+			lead.Category,
+			marshalStringSlice(lead.Categories),
+			lead.Address,
+			lead.City,
+			lead.State,
+			lead.Country,
+			lead.PostalCode,
+			lead.Phone,
+			marshalStringSlice(lead.Emails),
+			lead.Website,
+			lead.ReviewCount,
+			lead.ReviewRating,
+			lead.Latitude,
+			lead.Longitude,
+			lead.GmapsLink,
+			lead.Cid,
+			lead.Status,
+			lead.Description,
+			marshalStringSlice(lead.ServiceTags),
+			boolToInt(lead.IsEmailValid),
+			boolToInt(lead.IsPhoneValid),
+			boolToInt(lead.GmbClaimed),
+			ptrBoolToSQL(lead.HasSSL),
+			ptrBoolToSQL(lead.HasAnalytics),
+			ptrBoolToSQL(lead.HasFacebookPixel),
+			ptrBoolToSQL(lead.HasH1),
+			ptrBoolToSQL(lead.HasMetaDesc),
+			ptrIntToSQL(lead.PageSpeedScore),
+			marshalStringSlice(lead.TechStack),
+			lead.SocialLinks,
+			lead.OwnerName,
+			lead.OwnerID,
+			lead.Thumbnail,
+			lead.Timezone,
+			lead.PriceRange,
+			lead.PlusCode,
+			lead.CreatedAt.Format(time.RFC3339),
+			lead.UpdatedAt.Format(time.RFC3339),
+		)
 		if err == nil {
 			successCount++
 		}
 	}
 
+	if err := tx.Commit(); err != nil {
+		return successCount, err
+	}
+
 	return successCount, nil
 }
 
-// UpsertLeads batch-inserts or updates multiple leads.
 func (db *DB) UpsertLeads(ctx context.Context, leads []Lead) error {
-	for i := range leads {
-		if err := db.UpsertLead(ctx, &leads[i]); err != nil {
-			return fmt.Errorf("upsert lead %s: %w", leads[i].PlaceID, err)
-		}
-	}
-	return nil
+	_, err := db.BulkUpsertLeads(ctx, leads)
+	return err
 }
 
-// FetchLeads retrieves paginated and filtered leads.
 func (db *DB) FetchLeads(ctx context.Context, filter LeadFilter, page, pageSize int) ([]Lead, int, error) {
 	if page < 1 {
 		page = 1
 	}
-	if pageSize < 1 || pageSize > 100 {
+	if pageSize < 1 {
 		pageSize = 25
 	}
 
-	var conditions []string
-	var args []any
-	argIdx := 1
+	whereParts := []string{"1=1"}
+	args := make([]any, 0, 8)
 
-	if filter.Search != "" {
-		conditions = append(conditions, fmt.Sprintf(
-			"(title ILIKE $%d OR address ILIKE $%d OR phone ILIKE $%d)",
-			argIdx, argIdx, argIdx,
-		))
-		args = append(args, "%"+filter.Search+"%")
-		argIdx++
+	if s := strings.TrimSpace(filter.Search); s != "" {
+		whereParts = append(whereParts, "(LOWER(title) LIKE LOWER(?) OR LOWER(address) LIKE LOWER(?) OR LOWER(website) LIKE LOWER(?))")
+		like := "%" + s + "%"
+		args = append(args, like, like, like)
 	}
-
-	if filter.City != "" {
-		conditions = append(conditions, fmt.Sprintf("city ILIKE $%d", argIdx))
-		args = append(args, "%"+filter.City+"%")
-		argIdx++
+	if s := strings.TrimSpace(filter.City); s != "" {
+		whereParts = append(whereParts, "LOWER(city) = LOWER(?)")
+		args = append(args, s)
 	}
-
-	if filter.Category != "" {
-		conditions = append(conditions, fmt.Sprintf("category ILIKE $%d", argIdx))
-		args = append(args, "%"+filter.Category+"%")
-		argIdx++
+	if s := strings.TrimSpace(filter.Category); s != "" {
+		whereParts = append(whereParts, "LOWER(category) = LOWER(?)")
+		args = append(args, s)
 	}
-
-	if filter.Tag != "" {
-		conditions = append(conditions, fmt.Sprintf("$%d = ANY(service_tags)", argIdx))
-		args = append(args, filter.Tag)
-		argIdx++
+	if s := strings.TrimSpace(filter.Tag); s != "" {
+		whereParts = append(whereParts, "INSTR(service_tags_json, ?) > 0")
+		args = append(args, `"`+s+`"`)
 	}
-
 	if filter.MinRating > 0 {
-		conditions = append(conditions, fmt.Sprintf("review_rating >= $%d", argIdx))
+		whereParts = append(whereParts, "review_rating >= ?")
 		args = append(args, filter.MinRating)
-		argIdx++
 	}
 
-	whereClause := ""
-	if len(conditions) > 0 {
-		whereClause = "WHERE " + strings.Join(conditions, " AND ")
-	}
+	whereSQL := strings.Join(whereParts, " AND ")
 
-	// Count total
-	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM gmaps_leads %s", whereClause)
+	countQuery := "SELECT COUNT(*) FROM gmaps_leads WHERE " + whereSQL
 	var total int
-	if err := db.pool.QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
-		return nil, 0, fmt.Errorf("count leads: %w", err)
-	}
-
-	// Fetch page
-	offset := (page - 1) * pageSize
-	dataQuery := fmt.Sprintf(`
-		SELECT place_id, title, category, categories, address, city, state, country, postal_code,
-			phone, emails, website, review_count, review_rating, latitude, longitude,
-			gmaps_link, cid, status, description, owner_name, owner_id, thumbnail,
-			timezone, price_range, plus_code,
-			is_email_valid, is_phone_valid, has_ssl, has_analytics, has_facebook_pixel,
-			has_h1, has_meta_desc, page_speed_score, tech_stack, social_links,
-			service_tags, gmb_claimed, created_at, updated_at
-		FROM gmaps_leads %s
-		ORDER BY created_at DESC
-		LIMIT $%d OFFSET $%d
-	`, whereClause, argIdx, argIdx+1)
-
-	args = append(args, pageSize, offset)
-
-	rows, err := db.pool.Query(ctx, dataQuery, args...)
-	if err != nil {
-		return nil, 0, fmt.Errorf("query leads: %w", err)
-	}
-	defer rows.Close()
-
-	leads, err := scanLeads(rows)
-	if err != nil {
+	if err := db.pool.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
-	return leads, total, nil
+	offset := (page - 1) * pageSize
+	dataQuery := `
+SELECT
+  place_id, title, category, categories_json, address, city, state, country, postal_code,
+  phone, emails_json, website, review_count, review_rating, latitude, longitude, gmaps_link,
+  cid, status, description, service_tags_json, is_email_valid, is_phone_valid, gmb_claimed,
+  has_ssl, has_analytics, has_facebook_pixel, has_h1, has_meta_desc, page_speed_score,
+  tech_stack_json, social_links, owner_name, owner_id, thumbnail, timezone, price_range,
+  plus_code, created_at, updated_at
+FROM gmaps_leads
+WHERE ` + whereSQL + `
+ORDER BY updated_at DESC
+LIMIT ? OFFSET ?`
+	dataArgs := append(append([]any{}, args...), pageSize, offset)
+
+	rows, err := db.pool.QueryContext(ctx, dataQuery, dataArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	leads := make([]Lead, 0, pageSize)
+	for rows.Next() {
+		lead, err := scanLead(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		leads = append(leads, lead)
+	}
+
+	return leads, total, rows.Err()
 }
 
-// GetLead retrieves a single lead by place_id.
 func (db *DB) GetLead(ctx context.Context, placeID string) (*Lead, error) {
-	query := `
-		SELECT place_id, title, category, categories, address, city, state, country, postal_code,
-			phone, emails, website, review_count, review_rating, latitude, longitude,
-			gmaps_link, cid, status, description, owner_name, owner_id, thumbnail,
-			timezone, price_range, plus_code,
-			is_email_valid, is_phone_valid, has_ssl, has_analytics, has_facebook_pixel,
-			has_h1, has_meta_desc, page_speed_score, tech_stack, social_links,
-			service_tags, gmb_claimed, created_at, updated_at
-		FROM gmaps_leads
-		WHERE place_id = $1
-	`
+	const query = `
+SELECT
+  place_id, title, category, categories_json, address, city, state, country, postal_code,
+  phone, emails_json, website, review_count, review_rating, latitude, longitude, gmaps_link,
+  cid, status, description, service_tags_json, is_email_valid, is_phone_valid, gmb_claimed,
+  has_ssl, has_analytics, has_facebook_pixel, has_h1, has_meta_desc, page_speed_score,
+  tech_stack_json, social_links, owner_name, owner_id, thumbnail, timezone, price_range,
+  plus_code, created_at, updated_at
+FROM gmaps_leads
+WHERE place_id = ? LIMIT 1`
 
-	rows, err := db.pool.Query(ctx, query, placeID)
+	rows, err := db.pool.QueryContext(ctx, query, placeID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	leads, err := scanLeads(rows)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(leads) == 0 {
+	if !rows.Next() {
 		return nil, fmt.Errorf("lead not found: %s", placeID)
 	}
 
-	return &leads[0], nil
+	lead, err := scanLead(rows)
+	if err != nil {
+		return nil, err
+	}
+	return &lead, nil
 }
 
-// GetCompetitors finds top-rated leads in the same city.
 func (db *DB) GetCompetitors(ctx context.Context, city string, minRating float64) ([]Lead, error) {
-	query := `
-		SELECT place_id, title, category, categories, address, city, state, country, postal_code,
-			phone, emails, website, review_count, review_rating, latitude, longitude,
-			gmaps_link, cid, status, description, owner_name, owner_id, thumbnail,
-			timezone, price_range, plus_code,
-			is_email_valid, is_phone_valid, has_ssl, has_analytics, has_facebook_pixel,
-			has_h1, has_meta_desc, page_speed_score, tech_stack, social_links,
-			service_tags, gmb_claimed, created_at, updated_at
-		FROM gmaps_leads
-		WHERE city ILIKE $1 AND review_rating >= $2
-		ORDER BY review_rating DESC, review_count DESC
-		LIMIT 5
-	`
+	const query = `
+SELECT
+  place_id, title, category, categories_json, address, city, state, country, postal_code,
+  phone, emails_json, website, review_count, review_rating, latitude, longitude, gmaps_link,
+  cid, status, description, service_tags_json, is_email_valid, is_phone_valid, gmb_claimed,
+  has_ssl, has_analytics, has_facebook_pixel, has_h1, has_meta_desc, page_speed_score,
+  tech_stack_json, social_links, owner_name, owner_id, thumbnail, timezone, price_range,
+  plus_code, created_at, updated_at
+FROM gmaps_leads
+WHERE LOWER(city) = LOWER(?) AND review_rating >= ?
+ORDER BY review_rating DESC, review_count DESC
+LIMIT 10`
 
-	rows, err := db.pool.Query(ctx, query, city, minRating)
+	rows, err := db.pool.QueryContext(ctx, query, city, minRating)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	return scanLeads(rows)
-}
-
-// GetCompetitorsByCategory finds top-rated leads in the same city and category (market leaders).
-func (db *DB) GetCompetitorsByCategory(ctx context.Context, city, category, excludePlaceID string, minRating float64) ([]Lead, error) {
-	query := `
-		SELECT place_id, title, category, categories, address, city, state, country, postal_code,
-			phone, emails, website, review_count, review_rating, latitude, longitude,
-			gmaps_link, cid, status, description, owner_name, owner_id, thumbnail,
-			timezone, price_range, plus_code,
-			is_email_valid, is_phone_valid, has_ssl, has_analytics, has_facebook_pixel,
-			has_h1, has_meta_desc, page_speed_score, tech_stack, social_links,
-			service_tags, gmb_claimed, created_at, updated_at
-		FROM gmaps_leads
-		WHERE city ILIKE $1 
-			AND category ILIKE $2
-			AND place_id != $3
-			AND review_rating >= $4
-			AND review_count >= 10
-		ORDER BY review_rating DESC, review_count DESC
-		LIMIT 3
-	`
-
-	rows, err := db.pool.Query(ctx, query, city, category, excludePlaceID, minRating)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	return scanLeads(rows)
-}
-
-func scanLeads(rows pgx.Rows) ([]Lead, error) {
 	var leads []Lead
-
 	for rows.Next() {
-		var l Lead
-		err := rows.Scan(
-			&l.PlaceID, &l.Title, &l.Category, &l.Categories, &l.Address, &l.City, &l.State, &l.Country, &l.PostalCode,
-			&l.Phone, &l.Emails, &l.Website, &l.ReviewCount, &l.ReviewRating, &l.Latitude, &l.Longitude,
-			&l.GmapsLink, &l.Cid, &l.Status, &l.Description, &l.OwnerName, &l.OwnerID, &l.Thumbnail,
-			&l.Timezone, &l.PriceRange, &l.PlusCode,
-			&l.IsEmailValid, &l.IsPhoneValid, &l.HasSSL, &l.HasAnalytics, &l.HasFacebookPixel,
-			&l.HasH1, &l.HasMetaDesc, &l.PageSpeedScore, &l.TechStack, &l.SocialLinks,
-			&l.ServiceTags, &l.GmbClaimed, &l.CreatedAt, &l.UpdatedAt,
-		)
+		lead, err := scanLead(rows)
 		if err != nil {
-			return nil, fmt.Errorf("scan lead: %w", err)
+			return nil, err
 		}
+		leads = append(leads, lead)
+	}
+	return leads, rows.Err()
+}
 
-		leads = append(leads, l)
+func (db *DB) GetCompetitorsByCategory(ctx context.Context, city, category, excludePlaceID string, minRating float64) ([]Lead, error) {
+	const query = `
+SELECT
+  place_id, title, category, categories_json, address, city, state, country, postal_code,
+  phone, emails_json, website, review_count, review_rating, latitude, longitude, gmaps_link,
+  cid, status, description, service_tags_json, is_email_valid, is_phone_valid, gmb_claimed,
+  has_ssl, has_analytics, has_facebook_pixel, has_h1, has_meta_desc, page_speed_score,
+  tech_stack_json, social_links, owner_name, owner_id, thumbnail, timezone, price_range,
+  plus_code, created_at, updated_at
+FROM gmaps_leads
+WHERE LOWER(city) = LOWER(?)
+  AND LOWER(category) = LOWER(?)
+  AND place_id != ?
+  AND review_rating >= ?
+ORDER BY review_rating DESC, review_count DESC
+LIMIT 10`
+
+	rows, err := db.pool.QueryContext(ctx, query, city, category, excludePlaceID, minRating)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var leads []Lead
+	for rows.Next() {
+		lead, err := scanLead(rows)
+		if err != nil {
+			return nil, err
+		}
+		leads = append(leads, lead)
+	}
+	return leads, rows.Err()
+}
+
+func (db *DB) UpdateTechStack(ctx context.Context, placeID string, techs []string) error {
+	_, err := db.pool.ExecContext(ctx, "UPDATE gmaps_leads SET tech_stack_json = ?, updated_at = ? WHERE place_id = ?", marshalStringSlice(techs), time.Now().UTC().Format(time.RFC3339), placeID)
+	return err
+}
+
+func (db *DB) UpdatePageSpeedScore(ctx context.Context, placeID string, score int) error {
+	_, err := db.pool.ExecContext(ctx, "UPDATE gmaps_leads SET page_speed_score = ?, updated_at = ? WHERE place_id = ?", score, time.Now().UTC().Format(time.RFC3339), placeID)
+	return err
+}
+
+func (db *DB) UpdateEmails(ctx context.Context, placeID string, emails []string, isValid bool) error {
+	_, err := db.pool.ExecContext(ctx, "UPDATE gmaps_leads SET emails_json = ?, is_email_valid = ?, updated_at = ? WHERE place_id = ?", marshalStringSlice(emails), boolToInt(isValid), time.Now().UTC().Format(time.RFC3339), placeID)
+	return err
+}
+
+func (db *DB) GetStats(ctx context.Context) (*DashboardStats, error) {
+	const query = `
+SELECT
+  COUNT(*) AS total_leads,
+  SUM(CASE WHEN website <> '' THEN 1 ELSE 0 END) AS with_website,
+  SUM(CASE WHEN json_array_length(emails_json) > 0 THEN 1 ELSE 0 END) AS with_email,
+  COALESCE(AVG(CASE WHEN review_rating > 0 THEN review_rating END), 0) AS avg_rating,
+  SUM(CASE WHEN json_array_length(service_tags_json) > 2 THEN 1 ELSE 0 END) AS flagged_count
+FROM gmaps_leads`
+
+	var stats DashboardStats
+	err := db.pool.QueryRowContext(ctx, query).Scan(
+		&stats.TotalLeads,
+		&stats.WithWebsite,
+		&stats.WithEmail,
+		&stats.AvgRating,
+		&stats.FlaggedCount,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &stats, nil
+}
+
+func scanLead(rows *sql.Rows) (Lead, error) {
+	var (
+		lead                                                       Lead
+		categoriesJSON, emailsJSON, serviceTagsJSON, techStackJSON string
+		createdAt, updatedAt                                       string
+		isEmailValid, isPhoneValid, gmbClaimed                     int
+		hasSSL, hasAnalytics, hasFacebookPixel, hasH1, hasMetaDesc sql.NullInt64
+		pageSpeedScore                                             sql.NullInt64
+	)
+
+	err := rows.Scan(
+		&lead.PlaceID, &lead.Title, &lead.Category, &categoriesJSON, &lead.Address, &lead.City, &lead.State, &lead.Country, &lead.PostalCode,
+		&lead.Phone, &emailsJSON, &lead.Website, &lead.ReviewCount, &lead.ReviewRating, &lead.Latitude, &lead.Longitude, &lead.GmapsLink,
+		&lead.Cid, &lead.Status, &lead.Description, &serviceTagsJSON, &isEmailValid, &isPhoneValid, &gmbClaimed,
+		&hasSSL, &hasAnalytics, &hasFacebookPixel, &hasH1, &hasMetaDesc, &pageSpeedScore,
+		&techStackJSON, &lead.SocialLinks, &lead.OwnerName, &lead.OwnerID, &lead.Thumbnail, &lead.Timezone, &lead.PriceRange,
+		&lead.PlusCode, &createdAt, &updatedAt,
+	)
+	if err != nil {
+		return Lead{}, err
 	}
 
-	return leads, rows.Err()
+	lead.Categories = unmarshalStringSlice(categoriesJSON)
+	lead.Emails = unmarshalStringSlice(emailsJSON)
+	lead.ServiceTags = unmarshalStringSlice(serviceTagsJSON)
+	lead.TechStack = unmarshalStringSlice(techStackJSON)
+	lead.IsEmailValid = isEmailValid == 1
+	lead.IsPhoneValid = isPhoneValid == 1
+	lead.GmbClaimed = gmbClaimed == 1
+	lead.HasSSL = nullIntToBoolPtr(hasSSL)
+	lead.HasAnalytics = nullIntToBoolPtr(hasAnalytics)
+	lead.HasFacebookPixel = nullIntToBoolPtr(hasFacebookPixel)
+	lead.HasH1 = nullIntToBoolPtr(hasH1)
+	lead.HasMetaDesc = nullIntToBoolPtr(hasMetaDesc)
+	if pageSpeedScore.Valid {
+		v := int(pageSpeedScore.Int64)
+		lead.PageSpeedScore = &v
+	}
+
+	lead.CreatedAt = parseRFC3339(createdAt)
+	lead.UpdatedAt = parseRFC3339(updatedAt)
+
+	return lead, nil
+}
+
+func parseRFC3339(v string) time.Time {
+	t, err := time.Parse(time.RFC3339, v)
+	if err != nil {
+		return time.Now().UTC()
+	}
+	return t
+}
+
+func nullIntToBoolPtr(v sql.NullInt64) *bool {
+	if !v.Valid {
+		return nil
+	}
+	b := v.Int64 == 1
+	return &b
+}
+
+func marshalStringSlice(v []string) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return "[]"
+	}
+	return string(b)
+}
+
+func unmarshalStringSlice(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return []string{}
+	}
+	var out []string
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		return []string{}
+	}
+	if out == nil {
+		return []string{}
+	}
+	return out
+}
+
+func boolToInt(v bool) int {
+	if v {
+		return 1
+	}
+	return 0
+}
+
+func ptrBoolToSQL(v *bool) any {
+	if v == nil {
+		return nil
+	}
+	if *v {
+		return 1
+	}
+	return 0
+}
+
+func ptrIntToSQL(v *int) any {
+	if v == nil {
+		return nil
+	}
+	return *v
+}
+
+func IsNotFound(err error) bool {
+	return errors.Is(err, sql.ErrNoRows) || strings.Contains(strings.ToLower(err.Error()), "not found")
 }

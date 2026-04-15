@@ -2,7 +2,6 @@ package webrunner
 
 import (
 	"context"
-	"encoding/csv"
 	"errors"
 	"fmt"
 	"log"
@@ -16,16 +15,14 @@ import (
 
 	"github.com/gosom/google-maps-scraper/deduper"
 	"github.com/gosom/google-maps-scraper/exiter"
+	"github.com/gosom/google-maps-scraper/localdbwriter"
 	"github.com/gosom/google-maps-scraper/runner"
+	"github.com/gosom/google-maps-scraper/supabasewriter"
 	"github.com/gosom/google-maps-scraper/tlmt"
 	"github.com/gosom/google-maps-scraper/web"
-	"github.com/gosom/google-maps-scraper/web/gsheets"
 	"github.com/gosom/google-maps-scraper/web/jsonrepo"
 	"github.com/gosom/google-maps-scraper/web/sqlite"
-	"github.com/gosom/google-maps-scraper/webhookwriter"
-	"github.com/gosom/google-maps-scraper/supabasewriter"
 	"github.com/gosom/scrapemate"
-	"github.com/gosom/scrapemate/adapters/writers/csvwriter"
 	"github.com/gosom/scrapemate/scrapemateapp"
 	"golang.org/x/sync/errgroup"
 )
@@ -62,7 +59,15 @@ func New(cfg *runner.Config) (runner.Runner, error) {
 
 	svc := web.NewService(repo, cfg.DataFolder)
 
-	srv, err := web.New(svc, cfg.Addr)
+	srv, err := web.New(
+		svc,
+		cfg.Addr,
+		cfg.LeadsManagerURL,
+		cfg.LLMProvider,
+		cfg.LLMAPIKey,
+		cfg.LLMModel,
+		cfg.OllamaURL,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -237,24 +242,7 @@ func (w *webrunner) scrapeJob(ctx context.Context, job *web.Job) error {
 		return w.svc.Update(ctx, job)
 	}
 
-	var outfile *os.File
-	var wCsv *csv.Writer
-
-	outpath := filepath.Join(w.cfg.DataFolder, job.ID+".csv")
-	var errOut error
-	outfile, errOut = os.Create(outpath)
-	if errOut != nil {
-		return errOut
-	}
-
-	defer func() {
-		_ = outfile.Close()
-	}()
-
-	wCsv = csv.NewWriter(outfile)
-	defer wCsv.Flush()
-
-	mate, err := w.setupMate(ctx, wCsv, job)
+	mate, err := w.setupMate(ctx, job)
 	if err != nil {
 		job.Status = web.StatusFailed
 
@@ -348,7 +336,7 @@ func (w *webrunner) scrapeJob(ctx context.Context, job *web.Job) error {
 	return w.svc.Update(ctx, job)
 }
 
-func (w *webrunner) setupMate(_ context.Context, wCsv *csv.Writer, job *web.Job) (*scrapemateapp.ScrapemateApp, error) {
+func (w *webrunner) setupMate(_ context.Context, job *web.Job) (*scrapemateapp.ScrapemateApp, error) {
 	opts := []func(*scrapemateapp.Config) error{
 		scrapemateapp.WithConcurrency(w.cfg.Concurrency),
 		scrapemateapp.WithExitOnInactivity(time.Minute * 3),
@@ -379,58 +367,32 @@ func (w *webrunner) setupMate(_ context.Context, wCsv *csv.Writer, job *web.Job)
 	if !w.cfg.DisablePageReuse {
 		opts = append(opts,
 			scrapemateapp.WithPageReuseLimit(2),
-			scrapemateapp.WithPageReuseLimit(200),
+			scrapemateapp.WithBrowserReuseLimit(200),
 		)
 	}
 
 	log.Printf("job %s has proxy: %v", job.ID, hasProxy)
 
-	var writers []scrapemate.ResultWriter
-
-	// Determine which Google Sheet ID to use: per-job first, then global config
-	sheetID := job.Data.GoogleSheetID
-	if sheetID == "" {
-		sheetID = w.cfg.GoogleSheetID
+	localWriter, err := localdbwriter.New(context.Background(), w.cfg.LeadsDBPath)
+	if err != nil {
+		return nil, fmt.Errorf("create local leads db writer: %w", err)
 	}
 
-	if sheetID != "" {
-		gsWriter, err := gsheets.New(sheetID, "Sheet1")
-		if err != nil {
-			// Non-fatal: log warning and continue with CSV-only
-			log.Printf("WARNING: Google Sheets init failed (sheet=%s): %v — continuing with CSV only", sheetID, err)
+	var resultWriter scrapemate.ResultWriter = localWriter
+
+	// If DATABASE_URL is set, also write to Supabase
+	if w.cfg.Dsn != "" {
+		sbWriter, sbErr := supabasewriter.New(w.cfg.Dsn)
+		if sbErr != nil {
+			log.Printf("WARNING: supabase writer init failed: %v (continuing with local only)", sbErr)
 		} else {
-			writers = append(writers, gsWriter)
-			log.Printf("Google Sheets writer active for sheet: %s", sheetID)
+			log.Println("Supabase writer enabled — dual storage active")
+			resultWriter = newMultiWriter(localWriter, sbWriter)
 		}
-	}
-
-	csvWriter := csvwriter.NewCsvWriter(wCsv)
-	writers = append(writers, csvWriter)
-
-	if w.cfg.WebhookURL != "" {
-		writers = append(writers, webhookwriter.New(w.cfg.WebhookURL))
-	}
-
-	// Direct Supabase writer (preferred over webhook)
-	if w.cfg.SupabaseDBURL != "" {
-		sbWriter, err := supabasewriter.New(w.cfg.SupabaseDBURL)
-		if err != nil {
-			log.Printf("Warning: could not create Supabase writer: %v", err)
-		} else {
-			writers = append(writers, sbWriter)
-			log.Println("Supabase writer enabled - leads will be saved directly to database")
-		}
-	}
-
-	var finalWriters []scrapemate.ResultWriter
-	if len(writers) > 1 {
-		finalWriters = []scrapemate.ResultWriter{newMultiWriter(writers...)}
-	} else {
-		finalWriters = writers
 	}
 
 	matecfg, err := scrapemateapp.NewConfig(
-		finalWriters,
+		[]scrapemate.ResultWriter{resultWriter},
 		opts...,
 	)
 	if err != nil {

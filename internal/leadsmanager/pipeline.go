@@ -17,11 +17,12 @@ import (
 
 var (
 	emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
-	phoneRegex = regexp.MustCompile(`^[\+]?[0-9\s\-\(\)]{7,20}$`)
 )
 
 // ProcessEntry converts a scraped gmaps.Entry into an enriched Lead.
 func ProcessEntry(entry gmaps.Entry) Lead {
+	normalizedPhone := normalizePhone(entry.Phone)
+
 	lead := Lead{
 		PlaceID:      entry.PlaceID,
 		Title:        entry.Title,
@@ -32,7 +33,7 @@ func ProcessEntry(entry gmaps.Entry) Lead {
 		State:        entry.CompleteAddress.State,
 		Country:      entry.CompleteAddress.Country,
 		PostalCode:   entry.CompleteAddress.PostalCode,
-		Phone:        entry.Phone,
+		Phone:        normalizedPhone,
 		Emails:       entry.Emails,
 		Website:      entry.WebSite,
 		ReviewCount:  entry.ReviewCount,
@@ -106,23 +107,49 @@ func validateEmails(emails []string) bool {
 
 // validatePhone checks if the phone number looks valid.
 func validatePhone(phone string) bool {
-	if phone == "" {
+	normalized := normalizePhone(phone)
+	if normalized == "" {
 		return false
 	}
 	cleaned := strings.Map(func(r rune) rune {
-		if r >= '0' && r <= '9' || r == '+' {
+		if r >= '0' && r <= '9' {
+			return r
+		}
+		return -1
+	}, normalized)
+	// Must have at least 7 digits
+	digitCount := len(cleaned)
+	return digitCount >= 7 && digitCount <= 15
+}
+
+func normalizePhone(phone string) string {
+	phone = strings.TrimSpace(phone)
+	if phone == "" {
+		return ""
+	}
+
+	phone = strings.Trim(phone, "\"'")
+	phone = strings.TrimPrefix(phone, "=")
+	phone = strings.Trim(phone, "\"'")
+	phone = strings.ReplaceAll(phone, "\u00A0", " ")
+	phone = strings.TrimSpace(phone)
+
+	digits := strings.Map(func(r rune) rune {
+		if r >= '0' && r <= '9' {
 			return r
 		}
 		return -1
 	}, phone)
-	// Must have at least 7 digits
-	digitCount := 0
-	for _, c := range cleaned {
-		if c >= '0' && c <= '9' {
-			digitCount++
-		}
+
+	if digits == "" {
+		return ""
 	}
-	return digitCount >= 7 && phoneRegex.MatchString(phone)
+
+	if strings.HasPrefix(phone, "+") {
+		return "+" + digits
+	}
+
+	return digits
 }
 
 // enrichFromWebsite performs lightweight website analysis.

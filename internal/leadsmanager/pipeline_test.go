@@ -64,6 +64,8 @@ func TestProcessEntry_PhoneValid(t *testing.T) {
 		{"(212) 555-1234", true},
 		{"+44 20 7946 0958", true},
 		{"12345", false},
+		{"=61426767676", true},
+		{"\"+61 426 767 676\"", true},
 		{"", false},
 		{"abc", false},
 	}
@@ -72,6 +74,25 @@ func TestProcessEntry_PhoneValid(t *testing.T) {
 		t.Run(tt.phone, func(t *testing.T) {
 			result := validatePhone(tt.phone)
 			require.Equal(t, tt.valid, result, "phone: %s", tt.phone)
+		})
+	}
+}
+
+func TestNormalizePhone(t *testing.T) {
+	tests := []struct {
+		in  string
+		out string
+	}{
+		{"+61 426 767 676", "+61426767676"},
+		{"=61426767676", "61426767676"},
+		{"\"+61 426 767 676\"", "+61426767676"},
+		{"(212) 555-1234", "2125551234"},
+		{"", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.in, func(t *testing.T) {
+			require.Equal(t, tt.out, normalizePhone(tt.in))
 		})
 	}
 }

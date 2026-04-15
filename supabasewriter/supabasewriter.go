@@ -2,68 +2,72 @@ package supabasewriter
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
-	"os"
+	"strings"
 	"time"
+
+	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/gosom/google-maps-scraper/gmaps"
 	"github.com/gosom/google-maps-scraper/internal/leadsmanager"
 	"github.com/gosom/scrapemate"
 )
 
-type supabaseWriter struct {
-	db *leadsmanager.DB
+type writer struct {
+	db *sql.DB
 }
 
-// New creates a ResultWriter that writes directly to Supabase/PostgreSQL.
-// This reuses the leadsmanager package for database operations and enrichment.
-func New(dbURL string) (scrapemate.ResultWriter, error) {
-	if dbURL == "" {
-		dbURL = os.Getenv("SUPABASE_DB_URL")
-	}
-	if dbURL == "" {
-		return nil, fmt.Errorf("SUPABASE_DB_URL not set")
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	db, err := leadsmanager.NewDB(ctx, dbURL)
+// New creates a ResultWriter that persists scraped entries into a
+// Supabase-hosted PostgreSQL table (public.gmaps_leads).
+func New(dsn string) (scrapemate.ResultWriter, error) {
+	db, err := sql.Open("pgx", dsn)
 	if err != nil {
-		return nil, fmt.Errorf("connect to supabase: %w", err)
+		return nil, fmt.Errorf("supabasewriter: open db: %w", err)
 	}
 
-	log.Println("Supabase writer: connected successfully")
+	if err := db.Ping(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("supabasewriter: ping db: %w", err)
+	}
 
-	return &supabaseWriter{db: db}, nil
+	db.SetMaxOpenConns(5)
+	db.SetMaxIdleConns(2)
+	db.SetConnMaxLifetime(30 * time.Minute)
+
+	return &writer{db: db}, nil
 }
 
-func (w *supabaseWriter) Run(ctx context.Context, in <-chan scrapemate.Result) error {
+func (w *writer) Run(ctx context.Context, in <-chan scrapemate.Result) error {
 	const batchSize = 50
-	var buffer []gmaps.Entry
+	var buffer []leadsmanager.Lead
+
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
 
 	var processData func(any)
 	processData = func(data any) {
 		switch v := data.(type) {
 		case *gmaps.Entry:
 			if v != nil && v.PlaceID != "" {
-				buffer = append(buffer, *v)
+				buffer = append(buffer, leadsmanager.ProcessEntry(*v))
 			}
 		case gmaps.Entry:
 			if v.PlaceID != "" {
-				buffer = append(buffer, v)
+				buffer = append(buffer, leadsmanager.ProcessEntry(v))
 			}
 		case []*gmaps.Entry:
 			for _, e := range v {
 				if e != nil && e.PlaceID != "" {
-					buffer = append(buffer, *e)
+					buffer = append(buffer, leadsmanager.ProcessEntry(*e))
 				}
 			}
 		case []gmaps.Entry:
 			for _, e := range v {
 				if e.PlaceID != "" {
-					buffer = append(buffer, e)
+					buffer = append(buffer, leadsmanager.ProcessEntry(e))
 				}
 			}
 		case []any:
@@ -73,51 +77,202 @@ func (w *supabaseWriter) Run(ctx context.Context, in <-chan scrapemate.Result) e
 		}
 	}
 
-	for result := range in {
-		processData(result.Data)
-
-		if len(buffer) >= batchSize {
-			// Use fresh context for each batch to avoid cancellation issues
-			saveCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-			if err := w.saveBatch(saveCtx, buffer); err != nil {
-				log.Printf("Supabase save error: %v", err)
+	for {
+		select {
+		case result, ok := <-in:
+			if !ok {
+				if len(buffer) > 0 {
+					w.saveBatch(context.Background(), buffer)
+				}
+				w.db.Close()
+				return nil
 			}
-			cancel()
-			buffer = buffer[:0]
+			processData(result.Data)
+			if len(buffer) >= batchSize {
+				w.saveBatch(ctx, buffer)
+				buffer = buffer[:0]
+			}
+		case <-ticker.C:
+			if len(buffer) > 0 {
+				w.saveBatch(ctx, buffer)
+				buffer = buffer[:0]
+			}
+		case <-ctx.Done():
+			if len(buffer) > 0 {
+				w.saveBatch(context.Background(), buffer)
+			}
+			w.db.Close()
+			return ctx.Err()
 		}
 	}
-
-	// Final flush with fresh context
-	if len(buffer) > 0 {
-		finalCtx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-		defer cancel()
-		if err := w.saveBatch(finalCtx, buffer); err != nil {
-			log.Printf("Supabase final save error: %v", err)
-		}
-	}
-
-	w.db.Close()
-	return nil
 }
 
-func (w *supabaseWriter) saveBatch(ctx context.Context, entries []gmaps.Entry) error {
-	if len(entries) == 0 {
+func (w *writer) saveBatch(ctx context.Context, leads []leadsmanager.Lead) error {
+	if len(leads) == 0 {
 		return nil
 	}
 
-	// Convert entries to leads
-	leads := make([]leadsmanager.Lead, 0, len(entries))
-	for _, entry := range entries {
-		lead := leadsmanager.ProcessEntry(entry)
-		leads = append(leads, lead)
-	}
-
-	// Bulk upsert all leads in one batch operation
-	successCount, err := w.db.BulkUpsertLeads(ctx, leads)
+	tx, err := w.db.BeginTx(ctx, nil)
 	if err != nil {
-		log.Printf("Supabase bulk upsert error: %v", err)
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	successCount := 0
+	for _, lead := range leads {
+		now := time.Now().UTC()
+		if lead.CreatedAt.IsZero() {
+			lead.CreatedAt = now
+		}
+		lead.UpdatedAt = now
+
+		if lead.Categories == nil {
+			lead.Categories = []string{}
+		}
+		if lead.Emails == nil {
+			lead.Emails = []string{}
+		}
+		if lead.ServiceTags == nil {
+			lead.ServiceTags = []string{}
+		}
+		if lead.TechStack == nil {
+			lead.TechStack = []string{}
+		}
+		if lead.SocialLinks == "" {
+			lead.SocialLinks = "{}"
+		}
+
+		_, err := tx.ExecContext(ctx, `
+INSERT INTO public.gmaps_leads (
+  place_id, title, category, categories, address, city, state, country, postal_code,
+  phone, emails, website, review_count, review_rating, latitude, longitude, gmaps_link,
+  cid, status, description, service_tags, is_email_valid, is_phone_valid, gmb_claimed,
+  has_ssl, has_analytics, has_facebook_pixel, has_h1, has_meta_desc, page_speed_score,
+  tech_stack, social_links, owner_name, owner_id, thumbnail, timezone, price_range,
+  plus_code, created_at, updated_at
+) VALUES (
+  $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
+  $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40
+)
+ON CONFLICT (place_id) DO UPDATE SET
+  title = EXCLUDED.title,
+  category = EXCLUDED.category,
+  categories = EXCLUDED.categories,
+  address = EXCLUDED.address,
+  city = EXCLUDED.city,
+  state = EXCLUDED.state,
+  country = EXCLUDED.country,
+  postal_code = EXCLUDED.postal_code,
+  phone = EXCLUDED.phone,
+  emails = EXCLUDED.emails,
+  website = EXCLUDED.website,
+  review_count = EXCLUDED.review_count,
+  review_rating = EXCLUDED.review_rating,
+  latitude = EXCLUDED.latitude,
+  longitude = EXCLUDED.longitude,
+  gmaps_link = EXCLUDED.gmaps_link,
+  cid = EXCLUDED.cid,
+  status = EXCLUDED.status,
+  description = EXCLUDED.description,
+  service_tags = EXCLUDED.service_tags,
+  is_email_valid = EXCLUDED.is_email_valid,
+  is_phone_valid = EXCLUDED.is_phone_valid,
+  gmb_claimed = EXCLUDED.gmb_claimed,
+  has_ssl = EXCLUDED.has_ssl,
+  has_analytics = EXCLUDED.has_analytics,
+  has_facebook_pixel = EXCLUDED.has_facebook_pixel,
+  has_h1 = EXCLUDED.has_h1,
+  has_meta_desc = EXCLUDED.has_meta_desc,
+  page_speed_score = EXCLUDED.page_speed_score,
+  tech_stack = EXCLUDED.tech_stack,
+  social_links = EXCLUDED.social_links,
+  owner_name = EXCLUDED.owner_name,
+  owner_id = EXCLUDED.owner_id,
+  thumbnail = EXCLUDED.thumbnail,
+  timezone = EXCLUDED.timezone,
+  price_range = EXCLUDED.price_range,
+  plus_code = EXCLUDED.plus_code,
+  updated_at = EXCLUDED.updated_at`,
+			lead.PlaceID,
+			lead.Title,
+			lead.Category,
+			pqStringArray(lead.Categories),
+			lead.Address,
+			lead.City,
+			lead.State,
+			lead.Country,
+			lead.PostalCode,
+			lead.Phone,
+			pqStringArray(lead.Emails),
+			lead.Website,
+			lead.ReviewCount,
+			lead.ReviewRating,
+			lead.Latitude,
+			lead.Longitude,
+			lead.GmapsLink,
+			lead.Cid,
+			lead.Status,
+			lead.Description,
+			pqStringArray(lead.ServiceTags),
+			lead.IsEmailValid,
+			lead.IsPhoneValid,
+			lead.GmbClaimed,
+			lead.HasSSL,
+			lead.HasAnalytics,
+			lead.HasFacebookPixel,
+			lead.HasH1,
+			lead.HasMetaDesc,
+			lead.PageSpeedScore,
+			pqStringArray(lead.TechStack),
+			marshalJSON(lead.SocialLinks),
+			lead.OwnerName,
+			lead.OwnerID,
+			lead.Thumbnail,
+			lead.Timezone,
+			lead.PriceRange,
+			lead.PlusCode,
+			lead.CreatedAt,
+			lead.UpdatedAt,
+		)
+		if err == nil {
+			successCount++
+		} else {
+			log.Printf("supabase upsert error for %s: %v", lead.PlaceID, err)
+		}
 	}
 
-	log.Printf("Supabase: saved %d/%d entries", successCount, len(entries))
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	log.Printf("supabase: saved %d/%d leads", successCount, len(leads))
 	return nil
+}
+
+// pqStringArray formats a Go string slice as a PostgreSQL text[] literal.
+func pqStringArray(ss []string) string {
+	if len(ss) == 0 {
+		return "{}"
+	}
+	escaped := make([]string, len(ss))
+	for i, s := range ss {
+		s = strings.ReplaceAll(s, `\`, `\\`)
+		s = strings.ReplaceAll(s, `"`, `\"`)
+		escaped[i] = `"` + s + `"`
+	}
+	return "{" + strings.Join(escaped, ",") + "}"
+}
+
+// marshalJSON returns valid JSON; if input is already valid JSON return as-is,
+// otherwise wrap in a JSON string.
+func marshalJSON(v string) string {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return "{}"
+	}
+	if json.Valid([]byte(v)) {
+		return v
+	}
+	b, _ := json.Marshal(v)
+	return string(b)
 }

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"strconv"
 	"time"
 
@@ -15,25 +14,35 @@ import (
 
 // Manager coordinates the leads pipeline and database operations.
 type Manager struct {
-	db           *DB
-	enricher     *Enricher
-	sheetsSyncer *SheetsSyncer
+	db          *DB
+	enricher    *Enricher
+	llmProvider string
+	llmAPIKey   string
+	llmModel    string
+	ollamaURL   string
 }
 
 // NewManager creates a new Manager instance.
-func NewManager(db *DB) (*Manager, error) {
+func NewManager(db *DB, llmProvider, llmAPIKey, llmModel, ollamaURL string) (*Manager, error) {
 	enricher, err := NewEnricher(db)
 	if err != nil {
 		return nil, fmt.Errorf("init enricher: %w", err)
 	}
 
-	// Initialize Google Sheets syncer (optional - returns nil if not configured)
-	sheetsSyncer := NewSheetsSyncer()
+	if llmProvider == "" {
+		llmProvider = "ollama"
+	}
+	if ollamaURL == "" {
+		ollamaURL = "http://localhost:11434"
+	}
 
 	return &Manager{
-		db:           db,
-		enricher:     enricher,
-		sheetsSyncer: sheetsSyncer,
+		db:          db,
+		enricher:    enricher,
+		llmProvider: llmProvider,
+		llmAPIKey:   llmAPIKey,
+		llmModel:    llmModel,
+		ollamaURL:   ollamaURL,
 	}, nil
 }
 
@@ -106,18 +115,6 @@ func (m *Manager) HandleImport(w http.ResponseWriter, r *http.Request) {
 		}
 
 		log.Printf("Successfully imported %d leads", len(leads))
-
-		// Sync to Google Sheets (backup) - also use background context
-		if m.sheetsSyncer != nil && m.sheetsSyncer.IsEnabled() {
-			if err := m.sheetsSyncer.SyncLeads(dbCtx, leads); err != nil {
-				log.Printf("warning: Google Sheets sync error: %v", err)
-				// Non-fatal - continue even if Sheets sync fails
-			}
-			// Force flush to send data immediately
-			if err := m.sheetsSyncer.Flush(); err != nil {
-				log.Printf("warning: Google Sheets flush error: %v", err)
-			}
-		}
 	}
 
 	resp.Imported = len(leads)
@@ -228,19 +225,7 @@ type DashboardStats struct {
 }
 
 func (m *Manager) getStats(ctx context.Context) (*DashboardStats, error) {
-	var stats DashboardStats
-
-	err := m.db.pool.QueryRow(ctx, `
-		SELECT
-			COUNT(*),
-			COUNT(*) FILTER (WHERE website != ''),
-			COUNT(*) FILTER (WHERE array_length(emails, 1) > 0),
-			COALESCE(AVG(review_rating) FILTER (WHERE review_rating > 0), 0),
-			COUNT(*) FILTER (WHERE array_length(service_tags, 1) > 2)
-		FROM gmaps_leads
-	`).Scan(&stats.TotalLeads, &stats.WithWebsite, &stats.WithEmail, &stats.AvgRating, &stats.FlaggedCount)
-
-	return &stats, err
+	return m.db.GetStats(ctx)
 }
 
 // HandleTechStack runs tech stack detection on a lead.
@@ -343,6 +328,18 @@ func (m *Manager) HandlePitchPrompt(w http.ResponseWriter, r *http.Request) {
 	apiKey := r.URL.Query().Get("api_key")
 	provider := r.URL.Query().Get("provider")
 	modelName := r.URL.Query().Get("model")
+	if provider == "" {
+		provider = m.llmProvider
+	}
+	if apiKey == "" {
+		apiKey = m.llmAPIKey
+	}
+	if provider == "ollama" && apiKey == "" {
+		apiKey = m.ollamaURL
+	}
+	if modelName == "" {
+		modelName = m.llmModel
+	}
 	if placeID == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing place_id"})
 		return
@@ -358,50 +355,6 @@ func (m *Manager) HandlePitchPrompt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"prompt": prompt, "place_id": placeID})
-}
-
-// HandleSheetsSync manually syncs leads to Google Sheets.
-func (m *Manager) HandleSheetsSync(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	if m.sheetsSyncer == nil || !m.sheetsSyncer.IsEnabled() {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
-			"error":  "Google Sheets sync not configured",
-			"hint":   "Set GOOGLE_SHEET_ID and GOOGLE_CREDENTIALS_JSON environment variables",
-			"status": "disabled",
-		})
-		return
-	}
-
-	// Flush any buffered data
-	if err := m.sheetsSyncer.Flush(); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-
-	writeJSON(w, http.StatusOK, map[string]string{
-		"status":  "ok",
-		"message": "Google Sheets sync completed",
-	})
-}
-
-// HandleSheetsStatus returns the status of Google Sheets sync.
-func (m *Manager) HandleSheetsStatus(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	enabled := m.sheetsSyncer != nil && m.sheetsSyncer.IsEnabled()
-
-	writeJSON(w, http.StatusOK, map[string]any{
-		"enabled":      enabled,
-		"sheet_id_set": os.Getenv("GOOGLE_SHEET_ID") != "",
-		"creds_set":    os.Getenv("GOOGLE_CREDENTIALS_JSON") != "",
-	})
 }
 
 func writeJSON(w http.ResponseWriter, code int, data any) {

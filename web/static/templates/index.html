@@ -19,7 +19,10 @@
         <section class="card config-panel">
             <div class="header-with-actions">
                 <h1 class="section-title">Configuration</h1>
-                <button type="button" class="btn-info" id="info-btn" title="How to use">?</button>
+                <div class="header-actions">
+                    <a class="btn-open-link" href="{{.LeadsURL}}" target="_blank" rel="noopener noreferrer">Open Leads Manager</a>
+                    <button type="button" class="btn-info" id="info-btn" title="How to use">?</button>
+                </div>
             </div>
             <div id="error-container" class="error-message" style="display: none;"></div>
 
@@ -327,13 +330,13 @@
 
                 <div class="ai-form-group">
                     <label>API Key (or Host URL for Ollama)</label>
-                    <input type="password" id="ai-apikey" placeholder="Enter API Key">
-                    <div class="ai-hint">Keys are only used for this execution and not saved.</div>
+                    <input type="password" id="ai-apikey" placeholder="Enter API Key" value="{{.LLMAPIKey}}">
+                    <div class="ai-hint">Pre-filled from app config. Change only if needed for this run.</div>
                 </div>
 
                 <div class="ai-form-group">
                     <label>Model (Optional)</label>
-                    <input type="text" id="ai-model" placeholder="Leave blank for default">
+                    <input type="text" id="ai-model" placeholder="Leave blank for default" value="{{.LLMModel}}">
                 </div>
 
                 <div id="ai-error" class="ai-error"></div>
@@ -350,11 +353,8 @@
     <script>
         // AI Modal logic
         document.addEventListener('DOMContentLoaded', () => {
-            const savedProvider = sessionStorage.getItem('ai_provider');
-            if (savedProvider) document.getElementById('ai-provider').value = savedProvider;
-
-            const savedKey = sessionStorage.getItem('ai_apikey');
-            if (savedKey) document.getElementById('ai-apikey').value = savedKey;
+            const provider = document.getElementById('ai-provider');
+            provider.value = '{{.LLMProvider}}' || provider.value;
         });
 
         function openAIModal() {
@@ -375,7 +375,7 @@
 
             const errDiv = document.getElementById('ai-error');
 
-            if (!apiKey) {
+            if (!apiKey && provider !== 'ollama') {
                 errDiv.textContent = "API Key is required.";
                 errDiv.style.display = 'block';
                 return;
@@ -386,9 +386,6 @@
                 errDiv.style.display = 'block';
                 return;
             }
-
-            sessionStorage.setItem('ai_provider', provider);
-            sessionStorage.setItem('ai_apikey', apiKey);
 
             const btn = document.getElementById('btn-generate-ai');
             const originalText = btn.textContent;

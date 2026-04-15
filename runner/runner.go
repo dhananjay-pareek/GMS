@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gosom/google-maps-scraper/internal/leadsmanager"
 	"github.com/mattn/go-runewidth"
 	"golang.org/x/term"
 
@@ -28,6 +29,8 @@ const (
 	RunModeDatabaseProduce
 	RunModeInstallPlaywright
 	RunModeWeb
+	RunModeLeadsManager
+	RunModeWebAndLeadsManager
 	RunModeAwsLambda
 	RunModeAwsLambdaInvoker
 )
@@ -64,6 +67,8 @@ type Config struct {
 	RunMode                  int
 	DisableTelemetry         bool
 	WebRunner                bool
+	LeadsManagerRunner       bool
+	BothRunner               bool
 	AwsLamdbaRunner          bool
 	DataFolder               string
 	Proxies                  []string
@@ -78,13 +83,19 @@ type Config struct {
 	FastMode                 bool
 	Radius                   float64
 	Addr                     string
+	LeadsManagerAddr         string
+	ScraperURL               string
+	LeadsManagerURL          string
 	DisablePageReuse         bool
 	ExtraReviews             bool
 	LeadsDBAPIKey            string
 	DBType                   string
-	GoogleSheetID            string
 	WebhookURL               string
-	SupabaseDBURL            string
+	LeadsDBPath              string
+	LLMProvider              string
+	LLMAPIKey                string
+	LLMModel                 string
+	OllamaURL                string
 }
 
 func ParseConfig() *Config {
@@ -126,6 +137,8 @@ func ParseConfig() *Config {
 	flag.StringVar(&cfg.GeoCoordinates, "geo", "", "set geo coordinates for search (e.g., '37.7749,-122.4194')")
 	flag.IntVar(&cfg.Zoom, "zoom", 15, "set zoom level (0-21) for search")
 	flag.BoolVar(&cfg.WebRunner, "web", false, "run web server instead of crawling")
+	flag.BoolVar(&cfg.LeadsManagerRunner, "leads-manager", false, "run Leads Manager web app")
+	flag.BoolVar(&cfg.BothRunner, "both", true, "run scraper web and leads manager together")
 	defaultDataFolder := "webdata"
 	if df := os.Getenv("DATA_FOLDER"); df != "" {
 		defaultDataFolder = df
@@ -147,22 +160,48 @@ func ParseConfig() *Config {
 		defaultAddr = ":" + port
 	}
 	flag.StringVar(&cfg.Addr, "addr", defaultAddr, "address to listen on for web server (reads PORT env var if set)")
+	flag.StringVar(&cfg.LeadsManagerAddr, "leads-manager-addr", ":9090", "address to listen on for Leads Manager")
+	defaultScraperURL := os.Getenv("SCRAPER_URL")
+	if defaultScraperURL == "" {
+		defaultScraperURL = "http://localhost:8080"
+	}
+	flag.StringVar(&cfg.ScraperURL, "scraper-url", defaultScraperURL, "scraper web URL used by Leads Manager button (reads SCRAPER_URL env var)")
+	defaultLeadsManagerURL := os.Getenv("LEADS_MANAGER_URL")
+	if defaultLeadsManagerURL == "" {
+		defaultLeadsManagerURL = "http://localhost:9090"
+	}
+	flag.StringVar(&cfg.LeadsManagerURL, "leads-manager-url", defaultLeadsManagerURL, "leads manager URL used by Scraper button (reads LEADS_MANAGER_URL env var)")
 	flag.BoolVar(&cfg.DisablePageReuse, "disable-page-reuse", false, "disable page reuse in playwright")
 	flag.BoolVar(&cfg.ExtraReviews, "extra-reviews", false, "enable extra reviews collection")
 	flag.StringVar(&cfg.LeadsDBAPIKey, "leadsdb-api-key", "", "LeadsDB API key for exporting results to LeadsDB")
 	flag.StringVar(&cfg.DBType, "db-type", "sqlite", "type of database for web runner: 'sqlite' or 'json' [default: sqlite]")
 
-	defaultSheetID := ""
-	if sid := os.Getenv("GOOGLE_SHEET_ID"); sid != "" {
-		defaultSheetID = sid
-	}
-	flag.StringVar(&cfg.GoogleSheetID, "google-sheet-id", defaultSheetID, "Google Sheet ID to append results to (reads GOOGLE_SHEET_ID env var)")
-
 	defaultWebhook := os.Getenv("WEBHOOK_URL")
 	flag.StringVar(&cfg.WebhookURL, "webhook-url", defaultWebhook, "Webhook URL to POST exported leads to (reads WEBHOOK_URL env var)")
 
-	defaultSupabaseURL := os.Getenv("SUPABASE_DB_URL")
-	flag.StringVar(&cfg.SupabaseDBURL, "supabase-url", defaultSupabaseURL, "Supabase/PostgreSQL URL to write leads directly (reads SUPABASE_DB_URL env var)")
+	defaultLeadsDBPath := leadsmanager.ResolveDBPath("")
+	flag.StringVar(&cfg.LeadsDBPath, "leads-db-path", defaultLeadsDBPath, "local SQLite path for Leads Manager data (reads LEADS_DB_PATH env var)")
+
+	defaultLLMProvider := os.Getenv("LLM_PROVIDER")
+	if defaultLLMProvider == "" {
+		defaultLLMProvider = "ollama"
+	}
+	flag.StringVar(&cfg.LLMProvider, "llm-provider", defaultLLMProvider, "default LLM provider for scraper/leads manager (reads LLM_PROVIDER env var)")
+
+	defaultLLMAPIKey := os.Getenv("LLM_API_KEY")
+	flag.StringVar(&cfg.LLMAPIKey, "llm-api-key", defaultLLMAPIKey, "default LLM API key (or host URL for Ollama if desired) (reads LLM_API_KEY env var)")
+
+	defaultLLMModel := os.Getenv("LLM_MODEL")
+	if defaultLLMModel == "" {
+		defaultLLMModel = "qwen3-coder:480b-cloud"
+	}
+	flag.StringVar(&cfg.LLMModel, "llm-model", defaultLLMModel, "default LLM model name (reads LLM_MODEL env var)")
+
+	defaultOllamaURL := os.Getenv("OLLAMA_URL")
+	if defaultOllamaURL == "" {
+		defaultOllamaURL = "http://localhost:11434"
+	}
+	flag.StringVar(&cfg.OllamaURL, "ollama-url", defaultOllamaURL, "default Ollama base URL (reads OLLAMA_URL env var)")
 
 	flag.Parse()
 
@@ -219,7 +258,13 @@ func ParseConfig() *Config {
 		cfg.RunMode = RunModeAwsLambdaInvoker
 	case cfg.AwsLamdbaRunner:
 		cfg.RunMode = RunModeAwsLambda
-	case cfg.WebRunner || (cfg.Dsn == "" && cfg.InputFile == ""):
+	case cfg.WebRunner:
+		cfg.RunMode = RunModeWeb
+	case cfg.LeadsManagerRunner:
+		cfg.RunMode = RunModeLeadsManager
+	case cfg.BothRunner && cfg.InputFile == "":
+		cfg.RunMode = RunModeWebAndLeadsManager
+	case cfg.Dsn == "" && cfg.InputFile == "":
 		cfg.RunMode = RunModeWeb
 	case cfg.Dsn == "":
 		cfg.RunMode = RunModeFile

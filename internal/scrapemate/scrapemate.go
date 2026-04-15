@@ -529,7 +529,18 @@ func (s *ScrapeMate) startWorker(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case err := <-errc:
+		case err, ok := <-errc:
+			if !ok {
+				time.Sleep(100 * time.Millisecond)
+				jobc, errc = s.jobProvider.Jobs(ctx)
+				s.log.Info("restarted job provider")
+				continue
+			}
+
+			if err == nil {
+				continue
+			}
+
 			if ctx.Err() == context.Canceled {
 				return
 			}
@@ -541,7 +552,17 @@ func (s *ScrapeMate) startWorker(ctx context.Context) {
 			jobc, errc = s.jobProvider.Jobs(ctx)
 
 			s.log.Info("restarted job provider")
-		case job := <-jobc:
+		case job, ok := <-jobc:
+			if !ok {
+				time.Sleep(100 * time.Millisecond)
+				jobc, errc = s.jobProvider.Jobs(ctx)
+				s.log.Info("restarted job provider")
+				continue
+			}
+			if job == nil {
+				continue
+			}
+
 			ans, next, err := s.DoJob(ctx, job)
 			if err != nil {
 				s.log.Error("error while processing job", "error", err)

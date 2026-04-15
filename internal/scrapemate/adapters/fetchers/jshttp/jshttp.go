@@ -215,7 +215,6 @@ func newBrowser(pw *playwright.Playwright, headless, disableImages bool, proxyPo
 			`--disable-gpu`,
 			`--mute-audio`,
 			`--disable-extensions`,
-			`--single-process`,
 			`--disable-breakpad`,
 			`--disable-features=TranslateUI,BlinkGenPropertyTrees`,
 			`--disable-ipc-flooding-protection`,

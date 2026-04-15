@@ -14,7 +14,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /usr/bin/leadsmanager 
 # Final minimal stage
 FROM alpine:latest
 
-# Needed for making secure HTTPS requests to external APIs (OpenAI, Gemini, Supabase)
+# Needed for making secure HTTPS requests to external APIs (OpenAI, Gemini, etc.)
 RUN apk --no-cache add ca-certificates
 
 WORKDIR /app

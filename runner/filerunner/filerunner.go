@@ -2,24 +2,19 @@ package filerunner
 
 import (
 	"context"
-	"encoding/csv"
 	"fmt"
 	"io"
 	"log"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/gosom/google-maps-scraper/deduper"
 	"github.com/gosom/google-maps-scraper/exiter"
-	"github.com/gosom/google-maps-scraper/leadsdb"
+	"github.com/gosom/google-maps-scraper/localdbwriter"
 	"github.com/gosom/google-maps-scraper/runner"
 	"github.com/gosom/google-maps-scraper/supabasewriter"
 	"github.com/gosom/google-maps-scraper/tlmt"
-	"github.com/gosom/google-maps-scraper/webhookwriter"
 	"github.com/gosom/scrapemate"
-	"github.com/gosom/scrapemate/adapters/writers/csvwriter"
-	"github.com/gosom/scrapemate/adapters/writers/jsonwriter"
 	"github.com/gosom/scrapemate/scrapemateapp"
 )
 
@@ -28,7 +23,6 @@ type fileRunner struct {
 	input   io.Reader
 	writers []scrapemate.ResultWriter
 	app     *scrapemateapp.ScrapemateApp
-	outfile *os.File
 }
 
 func New(cfg *runner.Config) (runner.Runner, error) {
@@ -121,10 +115,6 @@ func (r *fileRunner) Close(context.Context) error {
 		}
 	}
 
-	if r.outfile != nil {
-		return r.outfile.Close()
-	}
-
 	return nil
 }
 
@@ -145,63 +135,25 @@ func (r *fileRunner) setInput() error {
 }
 
 func (r *fileRunner) setWriters() error {
-	switch {
-	case r.cfg.CustomWriter != "":
-		parts := strings.Split(r.cfg.CustomWriter, ":")
-		if len(parts) != 2 {
-			return fmt.Errorf("invalid custom writer format: %s", r.cfg.CustomWriter)
-		}
+	localWriter, err := localdbwriter.New(context.Background(), r.cfg.LeadsDBPath)
+	if err != nil {
+		return fmt.Errorf("create local leads db writer: %w", err)
+	}
 
-		dir, pluginName := parts[0], parts[1]
+	var resultWriter scrapemate.ResultWriter = localWriter
 
-		customWriter, err := runner.LoadCustomWriter(dir, pluginName)
-		if err != nil {
-			return err
-		}
-
-		r.writers = append(r.writers, customWriter)
-	case r.cfg.LeadsDBAPIKey != "":
-		r.writers = append(r.writers, leadsdb.New(r.cfg.LeadsDBAPIKey))
-	default:
-		var resultsWriter io.Writer
-
-		switch r.cfg.ResultsFile {
-		case "stdout":
-			resultsWriter = os.Stdout
-		default:
-			f, err := os.Create(r.cfg.ResultsFile)
-			if err != nil {
-				return err
-			}
-
-			r.outfile = f
-
-			resultsWriter = r.outfile
-		}
-
-		csvWriter := csvwriter.NewCsvWriter(csv.NewWriter(resultsWriter))
-
-		if r.cfg.JSON {
-			r.writers = append(r.writers, jsonwriter.NewJSONWriter(resultsWriter))
+	// If DATABASE_URL is set, also write to Supabase
+	if r.cfg.Dsn != "" {
+		sbWriter, sbErr := supabasewriter.New(r.cfg.Dsn)
+		if sbErr != nil {
+			log.Printf("WARNING: supabase writer init failed: %v (continuing with local only)", sbErr)
 		} else {
-			r.writers = append(r.writers, csvWriter)
+			log.Println("Supabase writer enabled — dual storage active")
+			resultWriter = newMultiWriter(localWriter, sbWriter)
 		}
 	}
 
-	if r.cfg.WebhookURL != "" {
-		r.writers = append(r.writers, webhookwriter.New(r.cfg.WebhookURL))
-	}
-
-	// Direct Supabase writer
-	if r.cfg.SupabaseDBURL != "" {
-		sbWriter, err := supabasewriter.New(r.cfg.SupabaseDBURL)
-		if err != nil {
-			log.Printf("Warning: could not create Supabase writer: %v", err)
-		} else {
-			r.writers = append(r.writers, sbWriter)
-			log.Println("Supabase writer enabled - leads will be saved directly to database")
-		}
-	}
+	r.writers = []scrapemate.ResultWriter{resultWriter}
 
 	return nil
 }
@@ -235,7 +187,7 @@ func (r *fileRunner) setApp() error {
 	if !r.cfg.DisablePageReuse {
 		opts = append(opts,
 			scrapemateapp.WithPageReuseLimit(2),
-			scrapemateapp.WithPageReuseLimit(200),
+			scrapemateapp.WithBrowserReuseLimit(200),
 		)
 	}
 

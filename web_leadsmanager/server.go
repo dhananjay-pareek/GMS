@@ -19,16 +19,44 @@ var static embed.FS
 
 // Server serves the Leads Manager dashboard and API.
 type Server struct {
-	tmpl map[string]*template.Template
-	srv  *http.Server
-	mgr  *leadsmanager.Manager
+	tmpl        map[string]*template.Template
+	srv         *http.Server
+	mgr         *leadsmanager.Manager
+	scraperURL  string
+	llmProvider string
+	llmAPIKey   string
+	llmModel    string
+	ollamaURL   string
 }
 
 // New creates a new Leads Manager web server.
-func New(mgr *leadsmanager.Manager, addr string) (*Server, error) {
+func New(
+	mgr *leadsmanager.Manager,
+	addr,
+	scraperURL,
+	llmProvider,
+	llmAPIKey,
+	llmModel,
+	ollamaURL string,
+) (*Server, error) {
+	if scraperURL == "" {
+		scraperURL = "http://localhost:8080"
+	}
+	if llmProvider == "" {
+		llmProvider = "ollama"
+	}
+	if ollamaURL == "" {
+		ollamaURL = "http://localhost:11434"
+	}
+
 	s := &Server{
-		mgr:  mgr,
-		tmpl: make(map[string]*template.Template),
+		mgr:         mgr,
+		tmpl:        make(map[string]*template.Template),
+		scraperURL:  scraperURL,
+		llmProvider: llmProvider,
+		llmAPIKey:   llmAPIKey,
+		llmModel:    llmModel,
+		ollamaURL:   ollamaURL,
 		srv: &http.Server{
 			Addr:              addr,
 			ReadHeaderTimeout: 10 * time.Second,
@@ -104,10 +132,6 @@ func New(mgr *leadsmanager.Manager, addr string) (*Server, error) {
 	mux.HandleFunc("/api/enrich/contacts", mgr.HandleContacts)
 	mux.HandleFunc("/api/enrich/pitch", mgr.HandlePitchPrompt)
 
-	// Google Sheets sync
-	mux.HandleFunc("/api/sheets/sync", mgr.HandleSheetsSync)
-	mux.HandleFunc("/api/sheets/status", mgr.HandleSheetsStatus)
-
 	mux.HandleFunc("/health", s.health)
 
 	handler := securityHeaders(mux)
@@ -148,6 +172,11 @@ func (s *Server) Start(ctx context.Context) error {
 	return nil
 }
 
+// Addr returns the configured bind address (e.g. ":9090").
+func (s *Server) Addr() string {
+	return s.srv.Addr
+}
+
 // DashboardData holds all data for the dashboard template.
 type DashboardData struct {
 	Leads    []leadsmanager.Lead
@@ -174,7 +203,17 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = tmpl.ExecuteTemplate(w, "leads.html", nil)
+	_ = tmpl.ExecuteTemplate(w, "leads.html", map[string]any{
+		"ScraperURL":  s.scraperURL,
+		"LLMProvider": s.llmProvider,
+		"LLMAPIKey": func() string {
+			if s.llmProvider == "ollama" && s.llmAPIKey == "" {
+				return s.ollamaURL
+			}
+			return s.llmAPIKey
+		}(),
+		"LLMModel": s.llmModel,
+	})
 }
 
 func (s *Server) leadRows(w http.ResponseWriter, r *http.Request) {

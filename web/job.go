@@ -72,7 +72,6 @@ type JobData struct {
 	Email         bool          `json:"email"`
 	MaxTime       time.Duration `json:"max_time"`
 	Proxies       []string      `json:"proxies"`
-	GoogleSheetID string        `json:"google_sheet_id"`
 }
 
 func (d *JobData) Validate() error {

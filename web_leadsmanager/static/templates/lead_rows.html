@@ -3,20 +3,14 @@
 <tr class="lead-row lead-row-card" data-place-id="{{.PlaceID}}">
     <td colspan="10">
         <div class="lead-card">
-            <!-- Row 1: Main Info -->
-            <div class="lead-card-row lead-card-row-main">
-                <div class="lead-info-primary">
-                    <div class="lead-title-wrap">
-                        <span class="lead-title">{{.Title}}</span>
-                        <span class="category-badge">{{.Category}}</span>
-                    </div>
-                    <div class="lead-meta">
-                        <span class="lead-location">📍 {{.City}}{{if .State}}, {{.State}}{{end}}</span>
-                        {{if .Phone}}<span class="lead-phone {{if not .IsPhoneValid}}cell-warn{{end}}">📞 {{.Phone}}</span>{{end}}
-                        {{if .Website}}<a href="{{.Website}}" target="_blank" rel="noopener" class="lead-website" title="{{.Website}}">🌐 Website</a>{{end}}
-                    </div>
+
+            <!-- Row 1: Title + Category + Rating -->
+            <div class="lc-header">
+                <div class="lc-title-block">
+                    <span class="lead-title">{{.Title}}</span>
+                    <span class="category-badge">{{.Category}}</span>
                 </div>
-                <div class="lead-info-stats">
+                <div class="lc-rating-block">
                     {{if gt .ReviewRating 0.0}}
                     <div class="lead-rating {{if lt .ReviewRating 4.0}}rating-low{{else}}rating-good{{end}}">
                         <span class="rating-star">★</span>
@@ -25,47 +19,72 @@
                     </div>
                     {{else}}
                     <div class="lead-rating rating-none">
-                        <span class="text-muted">No reviews</span>
+                        <span>No reviews</span>
                     </div>
                     {{end}}
-                    <div class="lead-indicators">
-                        <span class="indicator" title="SSL">{{boolIcon .HasSSL}} SSL</span>
-                        <span class="indicator" title="Analytics">{{boolIcon .HasAnalytics}} Analytics</span>
-                        {{if .GmbClaimed}}<span class="indicator indicator-good">✅ GMB Claimed</span>{{else}}<span class="indicator indicator-warn">⚠️ Unclaimed</span>{{end}}
-                    </div>
                 </div>
             </div>
-            <!-- Row 2: Tags & Actions -->
-            <div class="lead-card-row lead-card-row-actions">
-                <div class="lead-tags">
-                    {{if .ServiceTags}}
-                    {{range .ServiceTags}}
-                    <span class="service-tag">{{.}}</span>
-                    {{end}}
-                    {{else}}
-                    <span class="text-muted text-sm">No issues detected</span>
-                    {{end}}
-                </div>
-                <div class="lead-actions">
-                    {{if .Website}}
-                    <button class="btn-action-label btn-action-blue" onclick="runAction('techstack','{{.PlaceID}}',this)" title="Detect Tech Stack">
-                        <span class="btn-icon">🔧</span><span class="btn-text">Tech</span>
-                    </button>
-                    <button class="btn-action-label btn-action-green" onclick="runAction('pagespeed','{{.PlaceID}}',this)" title="Run PageSpeed">
-                        <span class="btn-icon">⚡</span><span class="btn-text">Speed</span>
-                    </button>
-                    <button class="btn-action-label btn-action-purple" onclick="runAction('screenshot','{{.PlaceID}}',this)" title="Take Screenshot">
-                        <span class="btn-icon">📸</span><span class="btn-text">Shot</span>
-                    </button>
-                    <button class="btn-action-label btn-action-orange" onclick="runAction('contacts','{{.PlaceID}}',this)" title="Find Contacts">
-                        <span class="btn-icon">👤</span><span class="btn-text">Contact</span>
-                    </button>
-                    {{end}}
-                    <button class="btn-action-label btn-action-pink" onclick="runAction('pitch','{{.PlaceID}}',this)" title="Generate Pitch">
-                        <span class="btn-icon">✉️</span><span class="btn-text">Pitch</span>
-                    </button>
-                </div>
+
+            <!-- Row 2: Location, Phone, Website inline -->
+            <div class="lc-meta">
+                <span class="lc-meta-item">📍 {{.City}}{{if .State}}, {{.State}}{{end}}</span>
+                {{if .Phone}}
+                <span class="lc-meta-item lc-meta-sep">·</span>
+                <a href="tel:{{.Phone}}" class="lc-meta-item lead-phone-link {{if not .IsPhoneValid}}cell-warn{{end}}"
+                    title="Call {{.Phone}}">📞 {{.Phone}}</a>
+                {{end}}
+                {{if .Website}}
+                <span class="lc-meta-item lc-meta-sep">·</span>
+                <a href="{{.Website}}" target="_blank" rel="noopener" class="lc-meta-item lead-website"
+                    title="{{.Website}}">🌐 Website</a>
+                {{end}}
             </div>
+
+            <!-- Row 3: Indicators + Tags in one row -->
+            <div class="lc-badges-row">
+                <span class="indicator {{if .HasSSL}}indicator-good{{else}}indicator-warn{{end}}" title="SSL">{{boolIcon
+                    .HasSSL}} SSL</span>
+                <span class="indicator {{if .HasAnalytics}}indicator-good{{else}}indicator-warn{{end}}"
+                    title="Analytics">{{boolIcon .HasAnalytics}} Analytics</span>
+                {{if .GmbClaimed}}
+                <span class="indicator indicator-good">✅ GMB</span>
+                {{else}}
+                <span class="indicator indicator-warn">⚠️ Unclaimed</span>
+                {{end}}
+                {{if .ServiceTags}}
+                <span class="lc-divider">|</span>
+                {{range .ServiceTags}}
+                <span class="service-tag">{{.}}</span>
+                {{end}}
+                {{end}}
+            </div>
+
+            <!-- Row 4: Action buttons -->
+            <div class="lc-actions">
+                {{if .Website}}
+                <button class="btn-action-label btn-action-blue" onclick="runAction('techstack','{{.PlaceID}}',this)"
+                    title="Detect Tech Stack">
+                    <span class="btn-icon">🔧</span><span class="btn-text">Tech</span>
+                </button>
+                <button class="btn-action-label btn-action-green" onclick="runAction('pagespeed','{{.PlaceID}}',this)"
+                    title="Run PageSpeed">
+                    <span class="btn-icon">⚡</span><span class="btn-text">Speed</span>
+                </button>
+                <button class="btn-action-label btn-action-purple" onclick="runAction('screenshot','{{.PlaceID}}',this)"
+                    title="Take Screenshot">
+                    <span class="btn-icon">📸</span><span class="btn-text">Screenshot</span>
+                </button>
+                <button class="btn-action-label btn-action-orange" onclick="runAction('contacts','{{.PlaceID}}',this)"
+                    title="Find Contacts">
+                    <span class="btn-icon">👤</span><span class="btn-text">Contacts</span>
+                </button>
+                {{end}}
+                <button class="btn-action-label btn-action-pink" onclick="runAction('pitch','{{.PlaceID}}',this)"
+                    title="Generate AI Pitch">
+                    <span class="btn-icon">✉️</span><span class="btn-text">Pitch</span>
+                </button>
+            </div>
+
         </div>
     </td>
 </tr>

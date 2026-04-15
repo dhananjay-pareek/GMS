@@ -31,34 +31,97 @@ func (o *memoryProvider) Jobs(ctx context.Context) (<-chan scrapemate.IJob, <-ch
 	errc := make(chan error, 1)
 
 	go func() {
+		defer close(out)
+		defer close(errc)
+
 		for {
 			var job scrapemate.IJob
 
 			select {
 			case <-ctx.Done():
-				errc <- ctx.Err()
+				if err := ctx.Err(); err != nil {
+					select {
+					case errc <- err:
+					default:
+					}
+				}
+
 				return
 			case job = <-o.p0:
-				out <- job
+				if job == nil {
+					continue
+				}
+
+				select {
+				case out <- job:
+				case <-ctx.Done():
+					return
+				}
 			default:
 				select {
 				case <-ctx.Done():
-					out <- job
+					return
 				case job = <-o.p0:
-					out <- job
+					if job == nil {
+						continue
+					}
+
+					select {
+					case out <- job:
+					case <-ctx.Done():
+						return
+					}
 				case job = <-o.p1:
-					out <- job
+					if job == nil {
+						continue
+					}
+
+					select {
+					case out <- job:
+					case <-ctx.Done():
+						return
+					}
 				default:
 					select {
 					case <-ctx.Done():
-						errc <- ctx.Err()
+						if err := ctx.Err(); err != nil {
+							select {
+							case errc <- err:
+							default:
+							}
+						}
+
 						return
 					case job = <-o.p0:
-						out <- job
+						if job == nil {
+							continue
+						}
+
+						select {
+						case out <- job:
+						case <-ctx.Done():
+							return
+						}
 					case job = <-o.p1:
-						out <- job
+						if job == nil {
+							continue
+						}
+
+						select {
+						case out <- job:
+						case <-ctx.Done():
+							return
+						}
 					case job = <-o.p2:
-						out <- job
+						if job == nil {
+							continue
+						}
+
+						select {
+						case out <- job:
+						case <-ctx.Done():
+							return
+						}
 					}
 				}
 			}
