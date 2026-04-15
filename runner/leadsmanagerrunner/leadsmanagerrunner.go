@@ -26,20 +26,34 @@ func New(ctx context.Context, cfg *runner.Config) (runner.Runner, error) {
 		return nil, fmt.Errorf("%w: %d", runner.ErrInvalidRunMode, cfg.RunMode)
 	}
 
-	db, err := leadsmanager.NewDB(ctx, cfg.LeadsDBPath)
+	localDB, err := leadsmanager.NewDB(ctx, cfg.LeadsDBPath)
 	if err != nil {
-		return nil, fmt.Errorf("connect to leads manager database: %w", err)
+		return nil, fmt.Errorf("connect to local database: %w", err)
+	}
+
+	var store leadsmanager.LeadStore = localDB
+
+	if dsn := os.Getenv("DATABASE_URL"); dsn != "" {
+		supDB, err := leadsmanager.NewSupabaseDB(dsn)
+		if err != nil {
+			log.Printf("WARNING: could not connect to Supabase (%v) — falling back to local DB only", err)
+		} else {
+			log.Println("Dual-source mode: fetching leads from local SQLite + Supabase")
+			store = leadsmanager.NewCombinedDB(localDB, supDB)
+		}
+	} else {
+		log.Println("Single-source mode: fetching leads from local SQLite only (set DATABASE_URL for Supabase)")
 	}
 
 	mgr, err := leadsmanager.NewManager(
-		db,
+		store,
 		cfg.LLMProvider,
 		cfg.LLMAPIKey,
 		cfg.LLMModel,
 		cfg.OllamaURL,
 	)
 	if err != nil {
-		db.Close()
+		localDB.Close()
 		return nil, fmt.Errorf("create leads manager: %w", err)
 	}
 
@@ -53,12 +67,12 @@ func New(ctx context.Context, cfg *runner.Config) (runner.Runner, error) {
 		cfg.OllamaURL,
 	)
 	if err != nil {
-		db.Close()
+		localDB.Close()
 		return nil, fmt.Errorf("create leads manager server: %w", err)
 	}
 
 	return &leadsManagerRunner{
-		db:  db,
+		db:  localDB,
 		srv: srv,
 	}, nil
 }
