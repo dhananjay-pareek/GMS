@@ -46,12 +46,12 @@ func (s *SupabaseDB) Close() {
 // supabaseSelectCols is the exact SELECT list that matches scanSupabaseLead's Scan() call.
 // Order MUST match the Scan() argument order in scanSupabaseLead.
 const supabaseSelectCols = `
-  place_id, title, category, categories, address, city, state, country, postal_code,
-  phone, emails, website, review_count, review_rating, latitude, longitude, gmaps_link,
-  cid, status, description, service_tags,
+  place_id, title, category, categories::text, address, city, state, country, postal_code,
+  phone, emails::text, website, review_count, review_rating, latitude, longitude, gmaps_link,
+  cid, status, description, service_tags::text,
   is_email_valid, is_phone_valid, gmb_claimed,
   has_ssl, has_analytics, has_facebook_pixel, has_h1, has_meta_desc, page_speed_score,
-  tech_stack, social_links::text,
+  tech_stack::text, social_links::text,
   owner_name, owner_id, thumbnail, timezone, price_range, plus_code,
   created_at, updated_at`
 

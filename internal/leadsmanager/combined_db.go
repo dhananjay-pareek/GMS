@@ -69,6 +69,8 @@ func (c *CombinedDB) FetchLeads(ctx context.Context, filter LeadFilter, page, pa
 	lr := <-localCh
 	rr := <-remoteCh
 
+	log.Printf("combined_db: FetchLeads counts -> local: %d, remote: %d (total: %d)", len(lr.leads), len(rr.leads), rr.total)
+
 	if lr.err != nil {
 		return nil, 0, lr.err
 	}
