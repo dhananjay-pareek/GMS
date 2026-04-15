@@ -43,7 +43,19 @@ func (s *SupabaseDB) Close() {
 	}
 }
 
-// FetchLeads queries public.gmaps_leads on Supabase with filtering, pagination.
+// supabaseSelectCols is the exact SELECT list that matches scanSupabaseLead's Scan() call.
+// Order MUST match the Scan() argument order in scanSupabaseLead.
+const supabaseSelectCols = `
+  place_id, title, category, categories, address, city, state, country, postal_code,
+  phone, emails, website, review_count, review_rating, latitude, longitude, gmaps_link,
+  cid, status, description, service_tags,
+  is_email_valid, is_phone_valid, gmb_claimed,
+  has_ssl, has_analytics, has_facebook_pixel, has_h1, has_meta_desc, page_speed_score,
+  tech_stack, social_links::text,
+  owner_name, owner_id, thumbnail, timezone, price_range, plus_code,
+  created_at, updated_at`
+
+// FetchLeads queries public.gmaps_leads on Supabase with filtering and pagination.
 func (s *SupabaseDB) FetchLeads(ctx context.Context, filter LeadFilter, page, pageSize int) ([]Lead, int, error) {
 	if page < 1 {
 		page = 1
@@ -57,9 +69,9 @@ func (s *SupabaseDB) FetchLeads(ctx context.Context, filter LeadFilter, page, pa
 	paramIdx := 1
 
 	placeholder := func() string {
-		s := fmt.Sprintf("$%d", paramIdx)
+		p := fmt.Sprintf("$%d", paramIdx)
 		paramIdx++
-		return s
+		return p
 	}
 
 	if q := strings.TrimSpace(filter.Search); q != "" {
@@ -95,14 +107,7 @@ func (s *SupabaseDB) FetchLeads(ctx context.Context, filter LeadFilter, page, pa
 	}
 
 	offset := (page - 1) * pageSize
-	dataQ := `
-SELECT
-  place_id, title, category, categories, address, city, state, country, postal_code,
-  phone, emails, website, review_count, review_rating, latitude, longitude, gmaps_link,
-  cid, status, description, service_tags, is_email_valid, is_phone_valid, gmb_claimed,
-  has_ssl, has_analytics, has_facebook_pixel, has_h1, has_meta_desc, page_speed_score,
-  tech_stack, social_links, owner_name, owner_id, thumbnail, timezone, price_range,
-  plus_code, created_at, updated_at
+	dataQ := `SELECT ` + supabaseSelectCols + `
 FROM public.gmaps_leads
 WHERE ` + whereSQL + `
 ORDER BY updated_at DESC
@@ -125,21 +130,17 @@ LIMIT ` + fmt.Sprintf("$%d", paramIdx) + ` OFFSET ` + fmt.Sprintf("$%d", paramId
 		}
 		leads = append(leads, lead)
 	}
-	return leads, total, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	log.Printf("supabase_db: fetched %d/%d leads", len(leads), total)
+	return leads, total, nil
 }
 
 // GetLead fetches a single lead from Supabase by place_id.
 func (s *SupabaseDB) GetLead(ctx context.Context, placeID string) (*Lead, error) {
-	const q = `
-SELECT
-  place_id, title, category, categories, address, city, state, country, postal_code,
-  phone, emails, website, review_count, review_rating, latitude, longitude, gmaps_link,
-  cid, status, description, service_tags, is_email_valid, is_phone_valid, gmb_claimed,
-  has_ssl, has_analytics, has_facebook_pixel, has_h1, has_meta_desc, page_speed_score,
-  tech_stack, social_links, owner_name, owner_id, thumbnail, timezone, price_range,
-  plus_code, created_at, updated_at
-FROM public.gmaps_leads
-WHERE place_id = $1 LIMIT 1`
+	q := `SELECT ` + supabaseSelectCols + `
+FROM public.gmaps_leads WHERE place_id = $1 LIMIT 1`
 
 	rows, err := s.pool.QueryContext(ctx, q, placeID)
 	if err != nil {
@@ -163,9 +164,9 @@ func (s *SupabaseDB) GetStats(ctx context.Context) (*DashboardStats, error) {
 SELECT
   COUNT(*) AS total_leads,
   SUM(CASE WHEN website <> '' THEN 1 ELSE 0 END) AS with_website,
-  SUM(CASE WHEN array_length(emails, 1) > 0 THEN 1 ELSE 0 END) AS with_email,
+  SUM(CASE WHEN cardinality(emails) > 0 THEN 1 ELSE 0 END) AS with_email,
   COALESCE(AVG(CASE WHEN review_rating > 0 THEN review_rating END), 0) AS avg_rating,
-  SUM(CASE WHEN array_length(service_tags, 1) > 2 THEN 1 ELSE 0 END) AS flagged_count
+  SUM(CASE WHEN cardinality(service_tags) > 2 THEN 1 ELSE 0 END) AS flagged_count
 FROM public.gmaps_leads`
 
 	var stats DashboardStats
@@ -184,18 +185,10 @@ FROM public.gmaps_leads`
 
 // GetCompetitors fetches top-rated leads by city from Supabase.
 func (s *SupabaseDB) GetCompetitors(ctx context.Context, city string, minRating float64) ([]Lead, error) {
-	const q = `
-SELECT
-  place_id, title, category, categories, address, city, state, country, postal_code,
-  phone, emails, website, review_count, review_rating, latitude, longitude, gmaps_link,
-  cid, status, description, service_tags, is_email_valid, is_phone_valid, gmb_claimed,
-  has_ssl, has_analytics, has_facebook_pixel, has_h1, has_meta_desc, page_speed_score,
-  tech_stack, social_links, owner_name, owner_id, thumbnail, timezone, price_range,
-  plus_code, created_at, updated_at
+	q := `SELECT ` + supabaseSelectCols + `
 FROM public.gmaps_leads
 WHERE LOWER(city) = LOWER($1) AND review_rating >= $2
-ORDER BY review_rating DESC, review_count DESC
-LIMIT 10`
+ORDER BY review_rating DESC, review_count DESC LIMIT 10`
 
 	rows, err := s.pool.QueryContext(ctx, q, city, minRating)
 	if err != nil {
@@ -216,21 +209,13 @@ LIMIT 10`
 
 // GetCompetitorsByCategory fetches competitors filtered by city and category from Supabase.
 func (s *SupabaseDB) GetCompetitorsByCategory(ctx context.Context, city, category, excludePlaceID string, minRating float64) ([]Lead, error) {
-	const q = `
-SELECT
-  place_id, title, category, categories, address, city, state, country, postal_code,
-  phone, emails, website, review_count, review_rating, latitude, longitude, gmaps_link,
-  cid, status, description, service_tags, is_email_valid, is_phone_valid, gmb_claimed,
-  has_ssl, has_analytics, has_facebook_pixel, has_h1, has_meta_desc, page_speed_score,
-  tech_stack, social_links, owner_name, owner_id, thumbnail, timezone, price_range,
-  plus_code, created_at, updated_at
+	q := `SELECT ` + supabaseSelectCols + `
 FROM public.gmaps_leads
 WHERE LOWER(city) = LOWER($1)
   AND LOWER(category) = LOWER($2)
   AND place_id != $3
   AND review_rating >= $4
-ORDER BY review_rating DESC, review_count DESC
-LIMIT 10`
+ORDER BY review_rating DESC, review_count DESC LIMIT 10`
 
 	rows, err := s.pool.QueryContext(ctx, q, city, category, excludePlaceID, minRating)
 	if err != nil {
@@ -257,31 +242,38 @@ func (s *SupabaseDB) UpdateEmails(_ context.Context, _ string, _ []string, _ boo
 	return nil
 }
 
-// scanSupabaseLead scans a row from the Supabase gmaps_leads table.
-// Postgres stores arrays as text[] so they come back as a string like {val1,val2}.
+// scanSupabaseLead scans a row that was selected with supabaseSelectCols.
+// Column order MUST match supabaseSelectCols exactly.
 func scanSupabaseLead(rows *sql.Rows) (Lead, error) {
 	var (
 		lead                                                       Lead
 		categoriesArr, emailsArr, serviceTagsArr, techStackArr     string
-		isEmailValid, isPhoneValid, gmbClaimed                     bool
+		isEmailValid, isPhoneValid, gmbClaimed                     sql.NullBool
 		hasSSL, hasAnalytics, hasFacebookPixel, hasH1, hasMetaDesc sql.NullBool
 		pageSpeedScore                                             sql.NullInt64
 		createdAt, updatedAt                                       time.Time
 	)
 
 	err := rows.Scan(
+		// place_id, title, category, categories, address, city, state, country, postal_code
 		&lead.PlaceID, &lead.Title, &lead.Category, &categoriesArr,
 		&lead.Address, &lead.City, &lead.State, &lead.Country, &lead.PostalCode,
+		// phone, emails, website, review_count, review_rating, latitude, longitude, gmaps_link
 		&lead.Phone, &emailsArr, &lead.Website,
 		&lead.ReviewCount, &lead.ReviewRating,
 		&lead.Latitude, &lead.Longitude, &lead.GmapsLink,
+		// cid, status, description, service_tags
 		&lead.Cid, &lead.Status, &lead.Description, &serviceTagsArr,
+		// is_email_valid, is_phone_valid, gmb_claimed
 		&isEmailValid, &isPhoneValid, &gmbClaimed,
-		&hasSSL, &hasAnalytics, &hasFacebookPixel, &hasH1, &hasMetaDesc,
-		&pageSpeedScore,
+		// has_ssl, has_analytics, has_facebook_pixel, has_h1, has_meta_desc, page_speed_score
+		&hasSSL, &hasAnalytics, &hasFacebookPixel, &hasH1, &hasMetaDesc, &pageSpeedScore,
+		// tech_stack, social_links::text
 		&techStackArr, &lead.SocialLinks,
+		// owner_name, owner_id, thumbnail, timezone, price_range, plus_code
 		&lead.OwnerName, &lead.OwnerID, &lead.Thumbnail, &lead.Timezone,
 		&lead.PriceRange, &lead.PlusCode,
+		// created_at, updated_at
 		&createdAt, &updatedAt,
 	)
 	if err != nil {
@@ -292,10 +284,16 @@ func scanSupabaseLead(rows *sql.Rows) (Lead, error) {
 	lead.Emails = parsePgArray(emailsArr)
 	lead.ServiceTags = parsePgArray(serviceTagsArr)
 	lead.TechStack = parsePgArray(techStackArr)
-	lead.IsEmailValid = isEmailValid
-	lead.IsPhoneValid = isPhoneValid
-	lead.GmbClaimed = gmbClaimed
 
+	if isEmailValid.Valid {
+		lead.IsEmailValid = isEmailValid.Bool
+	}
+	if isPhoneValid.Valid {
+		lead.IsPhoneValid = isPhoneValid.Bool
+	}
+	if gmbClaimed.Valid {
+		lead.GmbClaimed = gmbClaimed.Bool
+	}
 	if hasSSL.Valid {
 		v := hasSSL.Bool
 		lead.HasSSL = &v
@@ -333,14 +331,12 @@ func parsePgArray(raw string) []string {
 	if raw == "" || raw == "{}" {
 		return []string{}
 	}
-	// Strip outer braces
 	if len(raw) >= 2 && raw[0] == '{' && raw[len(raw)-1] == '}' {
 		raw = raw[1 : len(raw)-1]
 	}
 	if raw == "" {
 		return []string{}
 	}
-	// Split by comma, handle quoted elements
 	var result []string
 	var current strings.Builder
 	inQuote := false
