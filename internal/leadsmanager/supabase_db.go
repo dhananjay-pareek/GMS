@@ -163,10 +163,10 @@ func (s *SupabaseDB) GetStats(ctx context.Context) (*DashboardStats, error) {
 	const q = `
 SELECT
   COUNT(*) AS total_leads,
-  SUM(CASE WHEN website <> '' THEN 1 ELSE 0 END) AS with_website,
-  SUM(CASE WHEN cardinality(emails) > 0 THEN 1 ELSE 0 END) AS with_email,
+  COALESCE(SUM(CASE WHEN website <> '' THEN 1 ELSE 0 END), 0) AS with_website,
+  COALESCE(SUM(CASE WHEN cardinality(emails) > 0 THEN 1 ELSE 0 END), 0) AS with_email,
   COALESCE(AVG(CASE WHEN review_rating > 0 THEN review_rating END), 0) AS avg_rating,
-  SUM(CASE WHEN cardinality(service_tags) > 2 THEN 1 ELSE 0 END) AS flagged_count
+  COALESCE(SUM(CASE WHEN cardinality(service_tags) > 2 THEN 1 ELSE 0 END), 0) AS flagged_count
 FROM public.gmaps_leads`
 
 	var stats DashboardStats
