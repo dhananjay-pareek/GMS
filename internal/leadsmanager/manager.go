@@ -209,6 +209,7 @@ func (m *Manager) HandleStats(w http.ResponseWriter, r *http.Request) {
 
 	stats, err := m.getStats(ctx)
 	if err != nil {
+		log.Printf("ERROR: /api/stats failed: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
