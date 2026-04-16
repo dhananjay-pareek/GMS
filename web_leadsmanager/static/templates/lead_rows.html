@@ -51,6 +51,9 @@
                 {{else}}
                 <span class="indicator indicator-warn">⚠️ Unclaimed</span>
                 {{end}}
+                {{if .IsCalled}}
+                <span class="indicator indicator-good" title="Called">✅ Called</span>
+                {{end}}
                 {{if .ServiceTags}}
                 <span class="lc-divider">|</span>
                 {{range .ServiceTags}}
@@ -58,6 +61,13 @@
                 {{end}}
                 {{end}}
             </div>
+
+            {{if .IsCalled}}
+            <div class="lc-remarks">
+                <span class="remark-caller">👤 {{.CalledBy}}:</span>
+                <span class="remark-text">{{.CallResponse}}</span>
+            </div>
+            {{end}}
 
             <!-- Row 4: Action buttons -->
             <div class="lc-actions">
@@ -83,6 +93,10 @@
                     title="Generate AI Pitch">
                     <span class="btn-icon">✉️</span><span class="btn-text">Pitch</span>
                 </button>
+                <button class="btn-action-label btn-action-orange" onclick="openCallModal('{{.PlaceID}}', '{{.Title}}')"
+                    title="Mark as Called">
+                    <span class="btn-icon">📞</span><span class="btn-text">Remark</span>
+                </button>
             </div>
 
         </div>
@@ -104,7 +118,7 @@
 <tr id="load-more-row">
     <td colspan="10" class="load-more-cell">
         <button class="btn-load-more"
-            hx-get="/lead-rows?page={{add .Page 1}}&search={{.Search}}&city={{.City}}&category={{.Category}}&tag={{.Tag}}"
+            hx-get="/lead-rows?page={{add .Page 1}}&search={{.Search}}&city={{.City}}&category={{.Category}}&tag={{.Tag}}&is_called={{.IsCalledFilter}}"
             hx-target="#leads-tbody" hx-swap="innerHTML" hx-indicator="#table-spinner">
             Load More (Page {{add .Page 1}} of {{.Pages}})
         </button>

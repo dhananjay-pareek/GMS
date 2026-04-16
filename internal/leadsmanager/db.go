@@ -15,46 +15,50 @@ import (
 )
 
 type Lead struct {
-	PlaceID          string    `json:"place_id"`
-	Title            string    `json:"title"`
-	Category         string    `json:"category"`
-	Categories       []string  `json:"categories"`
-	Address          string    `json:"address"`
-	City             string    `json:"city"`
-	State            string    `json:"state"`
-	Country          string    `json:"country"`
-	PostalCode       string    `json:"postal_code"`
-	Phone            string    `json:"phone"`
-	Emails           []string  `json:"emails"`
-	Website          string    `json:"website"`
-	ReviewCount      int       `json:"review_count"`
-	ReviewRating     float64   `json:"review_rating"`
-	Latitude         float64   `json:"latitude"`
-	Longitude        float64   `json:"longitude"`
-	GmapsLink        string    `json:"gmaps_link"`
-	Cid              string    `json:"cid"`
-	Status           string    `json:"status"`
-	Description      string    `json:"description"`
-	ServiceTags      []string  `json:"service_tags"`
-	IsEmailValid     bool      `json:"is_email_valid"`
-	IsPhoneValid     bool      `json:"is_phone_valid"`
-	GmbClaimed       bool      `json:"gmb_claimed"`
-	HasSSL           *bool     `json:"has_ssl"`
-	HasAnalytics     *bool     `json:"has_analytics"`
-	HasFacebookPixel *bool     `json:"has_facebook_pixel"`
-	HasH1            *bool     `json:"has_h1"`
-	HasMetaDesc      *bool     `json:"has_meta_desc"`
-	PageSpeedScore   *int      `json:"page_speed_score"`
-	TechStack        []string  `json:"tech_stack"`
-	SocialLinks      string    `json:"social_links"`
-	OwnerName        string    `json:"owner_name"`
-	OwnerID          string    `json:"owner_id"`
-	Thumbnail        string    `json:"thumbnail"`
-	Timezone         string    `json:"timezone"`
-	PriceRange       string    `json:"price_range"`
-	PlusCode         string    `json:"plus_code"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	PlaceID          string     `json:"place_id"`
+	Title            string     `json:"title"`
+	Category         string     `json:"category"`
+	Categories       []string   `json:"categories"`
+	Address          string     `json:"address"`
+	City             string     `json:"city"`
+	State            string     `json:"state"`
+	Country          string     `json:"country"`
+	PostalCode       string     `json:"postal_code"`
+	Phone            string     `json:"phone"`
+	Emails           []string   `json:"emails"`
+	Website          string     `json:"website"`
+	ReviewCount      int        `json:"review_count"`
+	ReviewRating     float64    `json:"review_rating"`
+	Latitude         float64    `json:"latitude"`
+	Longitude        float64    `json:"longitude"`
+	GmapsLink        string     `json:"gmaps_link"`
+	Cid              string     `json:"cid"`
+	Status           string     `json:"status"`
+	Description      string     `json:"description"`
+	ServiceTags      []string   `json:"service_tags"`
+	IsEmailValid     bool       `json:"is_email_valid"`
+	IsPhoneValid     bool       `json:"is_phone_valid"`
+	GmbClaimed       bool       `json:"gmb_claimed"`
+	HasSSL           *bool      `json:"has_ssl"`
+	HasAnalytics     *bool      `json:"has_analytics"`
+	HasFacebookPixel *bool      `json:"has_facebook_pixel"`
+	HasH1            *bool      `json:"has_h1"`
+	HasMetaDesc      *bool      `json:"has_meta_desc"`
+	PageSpeedScore   *int       `json:"page_speed_score"`
+	TechStack        []string   `json:"tech_stack"`
+	SocialLinks      string     `json:"social_links"`
+	OwnerName        string     `json:"owner_name"`
+	OwnerID          string     `json:"owner_id"`
+	Thumbnail        string     `json:"thumbnail"`
+	Timezone         string     `json:"timezone"`
+	PriceRange       string     `json:"price_range"`
+	PlusCode         string     `json:"plus_code"`
+	IsCalled         bool       `json:"is_called"`
+	CalledBy         string     `json:"called_by"`
+	CallResponse     string     `json:"call_response"`
+	CalledAt         *time.Time `json:"called_at"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
 }
 
 type LeadFilter struct {
@@ -63,6 +67,7 @@ type LeadFilter struct {
 	Category  string
 	Tag       string
 	MinRating float64
+	IsCalled  *bool
 }
 
 // LeadStore is the read/write interface implemented by *DB (SQLite),
@@ -77,6 +82,7 @@ type LeadStore interface {
 	UpdateTechStack(ctx context.Context, placeID string, techs []string) error
 	UpdatePageSpeedScore(ctx context.Context, placeID string, score int) error
 	UpdateEmails(ctx context.Context, placeID string, emails []string, isValid bool) error
+	UpdateCallStatus(ctx context.Context, placeID, calledBy, response string) error
 	Close()
 }
 
@@ -173,6 +179,10 @@ CREATE TABLE IF NOT EXISTS gmaps_leads (
   timezone TEXT NOT NULL DEFAULT '',
   price_range TEXT NOT NULL DEFAULT '',
   plus_code TEXT NOT NULL DEFAULT '',
+  is_called INTEGER NOT NULL DEFAULT 0,
+  called_by TEXT NOT NULL DEFAULT '',
+  call_response TEXT NOT NULL DEFAULT '',
+  called_at TEXT NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -184,6 +194,19 @@ CREATE INDEX IF NOT EXISTS idx_gmaps_leads_rating ON gmaps_leads(review_rating);
 	if err != nil {
 		return fmt.Errorf("init leads schema: %w", err)
 	}
+
+	// Migrate existing databases: add call tracking columns if they don't exist.
+	// SQLite does not support IF NOT EXISTS in ALTER TABLE, so we ignore errors.
+	migrations := []string{
+		"ALTER TABLE gmaps_leads ADD COLUMN is_called INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE gmaps_leads ADD COLUMN called_by TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE gmaps_leads ADD COLUMN call_response TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE gmaps_leads ADD COLUMN called_at TEXT NULL",
+	}
+	for _, m := range migrations {
+		_, _ = db.pool.ExecContext(ctx, m) // Ignore "duplicate column" errors
+	}
+
 	return nil
 }
 
@@ -369,9 +392,13 @@ func (db *DB) FetchLeads(ctx context.Context, filter LeadFilter, page, pageSize 
 		whereParts = append(whereParts, "INSTR(service_tags_json, ?) > 0")
 		args = append(args, `"`+s+`"`)
 	}
-	if filter.MinRating > 0 {
-		whereParts = append(whereParts, "review_rating >= ?")
-		args = append(args, filter.MinRating)
+	if filter.IsCalled != nil {
+		whereParts = append(whereParts, "is_called = ?")
+		if *filter.IsCalled {
+			args = append(args, 1)
+		} else {
+			args = append(args, 0)
+		}
 	}
 
 	whereSQL := strings.Join(whereParts, " AND ")
@@ -390,7 +417,7 @@ SELECT
   cid, status, description, service_tags_json, is_email_valid, is_phone_valid, gmb_claimed,
   has_ssl, has_analytics, has_facebook_pixel, has_h1, has_meta_desc, page_speed_score,
   tech_stack_json, social_links, owner_name, owner_id, thumbnail, timezone, price_range,
-  plus_code, created_at, updated_at
+  plus_code, is_called, called_by, call_response, called_at, created_at, updated_at
 FROM gmaps_leads
 WHERE ` + whereSQL + `
 ORDER BY updated_at DESC
@@ -423,7 +450,7 @@ SELECT
   cid, status, description, service_tags_json, is_email_valid, is_phone_valid, gmb_claimed,
   has_ssl, has_analytics, has_facebook_pixel, has_h1, has_meta_desc, page_speed_score,
   tech_stack_json, social_links, owner_name, owner_id, thumbnail, timezone, price_range,
-  plus_code, created_at, updated_at
+  plus_code, is_called, called_by, call_response, called_at, created_at, updated_at
 FROM gmaps_leads
 WHERE place_id = ? LIMIT 1`
 
@@ -452,7 +479,7 @@ SELECT
   cid, status, description, service_tags_json, is_email_valid, is_phone_valid, gmb_claimed,
   has_ssl, has_analytics, has_facebook_pixel, has_h1, has_meta_desc, page_speed_score,
   tech_stack_json, social_links, owner_name, owner_id, thumbnail, timezone, price_range,
-  plus_code, created_at, updated_at
+  plus_code, is_called, called_by, call_response, called_at, created_at, updated_at
 FROM gmaps_leads
 WHERE LOWER(city) = LOWER(?) AND review_rating >= ?
 ORDER BY review_rating DESC, review_count DESC
@@ -483,7 +510,7 @@ SELECT
   cid, status, description, service_tags_json, is_email_valid, is_phone_valid, gmb_claimed,
   has_ssl, has_analytics, has_facebook_pixel, has_h1, has_meta_desc, page_speed_score,
   tech_stack_json, social_links, owner_name, owner_id, thumbnail, timezone, price_range,
-  plus_code, created_at, updated_at
+  plus_code, is_called, called_by, call_response, called_at, created_at, updated_at
 FROM gmaps_leads
 WHERE LOWER(city) = LOWER(?)
   AND LOWER(category) = LOWER(?)
@@ -524,6 +551,13 @@ func (db *DB) UpdateEmails(ctx context.Context, placeID string, emails []string,
 	return err
 }
 
+func (db *DB) UpdateCallStatus(ctx context.Context, placeID, calledBy, response string) error {
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, err := db.pool.ExecContext(ctx, "UPDATE gmaps_leads SET is_called = 1, called_by = ?, call_response = ?, called_at = ?, updated_at = ? WHERE place_id = ?",
+		calledBy, response, now, now, placeID)
+	return err
+}
+
 func (db *DB) GetStats(ctx context.Context) (*DashboardStats, error) {
 	const query = `
 SELECT
@@ -556,6 +590,8 @@ func scanLead(rows *sql.Rows) (Lead, error) {
 		isEmailValid, isPhoneValid, gmbClaimed                     int
 		hasSSL, hasAnalytics, hasFacebookPixel, hasH1, hasMetaDesc sql.NullInt64
 		pageSpeedScore                                             sql.NullInt64
+		isCalled                                                   int
+		calledAt                                                   sql.NullString
 	)
 
 	err := rows.Scan(
@@ -564,7 +600,7 @@ func scanLead(rows *sql.Rows) (Lead, error) {
 		&lead.Cid, &lead.Status, &lead.Description, &serviceTagsJSON, &isEmailValid, &isPhoneValid, &gmbClaimed,
 		&hasSSL, &hasAnalytics, &hasFacebookPixel, &hasH1, &hasMetaDesc, &pageSpeedScore,
 		&techStackJSON, &lead.SocialLinks, &lead.OwnerName, &lead.OwnerID, &lead.Thumbnail, &lead.Timezone, &lead.PriceRange,
-		&lead.PlusCode, &createdAt, &updatedAt,
+		&lead.PlusCode, &isCalled, &lead.CalledBy, &lead.CallResponse, &calledAt, &createdAt, &updatedAt,
 	)
 	if err != nil {
 		return Lead{}, err
@@ -585,6 +621,16 @@ func scanLead(rows *sql.Rows) (Lead, error) {
 	if pageSpeedScore.Valid {
 		v := int(pageSpeedScore.Int64)
 		lead.PageSpeedScore = &v
+	}
+
+	lead.Timezone = strings.TrimSpace(lead.Timezone)
+
+	lead.IsCalled = isCalled == 1
+	lead.CalledBy = strings.TrimSpace(lead.CalledBy)
+	lead.CallResponse = strings.TrimSpace(lead.CallResponse)
+	if calledAt.Valid {
+		t, _ := time.Parse(time.RFC3339, calledAt.String)
+		lead.CalledAt = &t
 	}
 
 	lead.CreatedAt = parseRFC3339(createdAt)

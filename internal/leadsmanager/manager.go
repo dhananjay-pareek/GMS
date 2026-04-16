@@ -137,6 +137,11 @@ func (m *Manager) HandleLeads(w http.ResponseWriter, r *http.Request) {
 		Tag:      q.Get("tag"),
 	}
 
+	if isCalled := q.Get("is_called"); isCalled != "" {
+		v := isCalled == "true"
+		filter.IsCalled = &v
+	}
+
 	if minR := q.Get("min_rating"); minR != "" {
 		if v, err := strconv.ParseFloat(minR, 64); err == nil {
 			filter.MinRating = v
@@ -196,6 +201,49 @@ func (m *Manager) HandleLead(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, lead)
+}
+
+// UpdateCallStatusRequest represents the JSON body for the call status update.
+type UpdateCallStatusRequest struct {
+	CalledBy string `json:"called_by"`
+	Response string `json:"response"`
+}
+
+// HandleUpdateCallStatus records a call remark via POST /api/leads/{place_id}/call.
+func (m *Manager) HandleUpdateCallStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	placeID := r.PathValue("place_id")
+	if placeID == "" {
+		placeID = r.URL.Query().Get("place_id")
+	}
+
+	if placeID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing place_id"})
+		return
+	}
+
+	var req UpdateCallStatusRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON: " + err.Error()})
+		return
+	}
+
+	if req.CalledBy == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "caller name is required"})
+		return
+	}
+
+	if err := m.db.UpdateCallStatus(r.Context(), placeID, req.CalledBy, req.Response); err != nil {
+		log.Printf("error updating call status: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "success"})
 }
 
 // HandleStats returns aggregate stats for the dashboard header.

@@ -53,10 +53,21 @@
             </div>
         </section>
 
+        <!-- Views Toggle -->
+        <div class="views-toggle-container">
+            <div class="views-toggle">
+                <button type="button" class="view-btn active" id="btn-view-new" onclick="switchView('false')">New
+                    Leads</button>
+                <button type="button" class="view-btn" id="btn-view-called" onclick="switchView('true')">Called
+                    Leads</button>
+            </div>
+        </div>
+
         <!-- Filters -->
         <section class="card filter-bar">
             <form id="filter-form" hx-get="/lead-rows" hx-target="#leads-tbody" hx-swap="innerHTML" hx-trigger="submit"
                 hx-push-url="false" hx-indicator="#table-spinner">
+                <input type="hidden" name="is_called" id="filter-is-called" value="false">
                 <div class="filter-row">
                     <input type="text" name="search" id="filter-search" placeholder="🔍 Search leads..."
                         class="filter-input filter-input-wide" />
@@ -97,7 +108,7 @@
                             <th>Lead Details</th>
                         </tr>
                     </thead>
-                    <tbody id="leads-tbody" hx-get="/lead-rows" hx-trigger="load" hx-swap="innerHTML"
+                    <tbody id="leads-tbody" hx-get="/lead-rows?is_called=false" hx-trigger="load" hx-swap="innerHTML"
                         hx-indicator="#table-spinner">
                     </tbody>
                 </table>
@@ -114,6 +125,31 @@
             </div>
             <div class="modal-body" id="modal-body">
                 <pre id="modal-pre"></pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- Call Remark Modal -->
+    <div class="modal-overlay" id="call-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Record Call Result — <span id="call-lead-title"></span></h3>
+                <button class="modal-close" onclick="closeCallModal()">&times;</button>
+            </div>
+            <div class="modal-body call-modal-body">
+                <div class="form-group">
+                    <label for="caller-name">Who Called?</label>
+                    <input type="text" id="caller-name" class="form-input" placeholder="Enter your name" required>
+                </div>
+                <div class="form-group">
+                    <label for="call-remark">Response / Remarks</label>
+                    <textarea id="call-remark" class="form-textarea" placeholder="What did they say?"></textarea>
+                </div>
+                <input type="hidden" id="call-place-id">
+            </div>
+            <div class="modal-footer">
+                <button class="btn-filter-clear" onclick="closeCallModal()">Cancel</button>
+                <button class="btn-filter" id="btn-save-call" onclick="submitCallRemark()">Save Remark</button>
             </div>
         </div>
     </div>
@@ -157,7 +193,80 @@
             document.getElementById('filter-city').value = '';
             document.getElementById('filter-category').value = '';
             document.getElementById('filter-tag').value = '';
-            htmx.ajax('GET', '/lead-rows', { target: '#leads-tbody', swap: 'innerHTML' });
+            const isCalled = document.getElementById('filter-is-called').value;
+            htmx.ajax('GET', '/lead-rows?is_called=' + isCalled, { target: '#leads-tbody', swap: 'innerHTML' });
+        }
+
+        function switchView(isCalled) {
+            document.getElementById('filter-is-called').value = isCalled;
+
+            // Toggle active class
+            document.getElementById('btn-view-new').classList.toggle('active', isCalled === 'false');
+            document.getElementById('btn-view-called').classList.toggle('active', isCalled === 'true');
+
+            // Trigger filter submit
+            htmx.trigger('#filter-form', 'submit');
+        }
+
+        function openCallModal(placeId, leadTitle) {
+            document.getElementById('call-place-id').value = placeId;
+            document.getElementById('call-lead-title').textContent = leadTitle;
+            document.getElementById('call-remark').value = '';
+            document.getElementById('call-modal').classList.add('active');
+
+            // Auto-fill caller name if stored in localStorage
+            const savedName = localStorage.getItem('callerName');
+            if (savedName) {
+                document.getElementById('caller-name').value = savedName;
+            }
+        }
+
+        function closeCallModal() {
+            document.getElementById('call-modal').classList.remove('active');
+        }
+
+        async function submitCallRemark() {
+            const placeId = document.getElementById('call-place-id').value;
+            const callerName = document.getElementById('caller-name').value;
+            const remark = document.getElementById('call-remark').value;
+            const btn = document.getElementById('btn-save-call');
+
+            if (!callerName) {
+                alert('Please enter your name');
+                return;
+            }
+
+            // Save caller name for next time
+            localStorage.setItem('callerName', callerName);
+
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+
+            try {
+                const resp = await fetch(`/api/leads/${encodeURIComponent(placeId)}/call`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        called_by: callerName,
+                        response: remark
+                    })
+                });
+
+                if (resp.ok) {
+                    closeCallModal();
+                    // Refresh current view
+                    htmx.trigger('#filter-form', 'submit');
+                    // Refresh stats since is_called filter might change counts if implemented in stats
+                } else {
+                    const data = await resp.json();
+                    alert('Error: ' + (data.error || 'Failed to save remark'));
+                }
+            } catch (err) {
+                alert('Network error: ' + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Save Remark';
+            }
         }
 
         const appLLMProvider = '{{.LLMProvider}}';

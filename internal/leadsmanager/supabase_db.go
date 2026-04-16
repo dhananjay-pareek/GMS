@@ -53,6 +53,7 @@ const supabaseSelectCols = `
   has_ssl, has_analytics, has_facebook_pixel, has_h1, has_meta_desc, page_speed_score,
   tech_stack::text, social_links::text,
   owner_name, owner_id, thumbnail, timezone, price_range, plus_code,
+  is_called, called_by, call_response, called_at,
   created_at, updated_at`
 
 // FetchLeads queries public.gmaps_leads on Supabase with filtering and pagination.
@@ -96,6 +97,10 @@ func (s *SupabaseDB) FetchLeads(ctx context.Context, filter LeadFilter, page, pa
 	if filter.MinRating > 0 {
 		whereParts = append(whereParts, fmt.Sprintf("review_rating >= %s", placeholder()))
 		args = append(args, filter.MinRating)
+	}
+	if filter.IsCalled != nil {
+		whereParts = append(whereParts, fmt.Sprintf("is_called = %s", placeholder()))
+		args = append(args, *filter.IsCalled)
 	}
 
 	whereSQL := strings.Join(whereParts, " AND ")
@@ -242,6 +247,13 @@ func (s *SupabaseDB) UpdateEmails(_ context.Context, _ string, _ []string, _ boo
 	return nil
 }
 
+func (s *SupabaseDB) UpdateCallStatus(ctx context.Context, placeID, calledBy, response string) error {
+	now := time.Now().UTC()
+	_, err := s.pool.ExecContext(ctx, "UPDATE public.gmaps_leads SET is_called = true, called_by = $1, call_response = $2, called_at = $3, updated_at = $4 WHERE place_id = $5",
+		calledBy, response, now, now, placeID)
+	return err
+}
+
 // scanSupabaseLead scans a row that was selected with supabaseSelectCols.
 // Column order MUST match supabaseSelectCols exactly.
 func scanSupabaseLead(rows *sql.Rows) (Lead, error) {
@@ -251,6 +263,8 @@ func scanSupabaseLead(rows *sql.Rows) (Lead, error) {
 		isEmailValid, isPhoneValid, gmbClaimed                     sql.NullBool
 		hasSSL, hasAnalytics, hasFacebookPixel, hasH1, hasMetaDesc sql.NullBool
 		pageSpeedScore                                             sql.NullInt64
+		isCalled                                                   sql.NullBool
+		calledAt                                                   sql.NullTime
 		createdAt, updatedAt                                       time.Time
 	)
 
@@ -273,6 +287,8 @@ func scanSupabaseLead(rows *sql.Rows) (Lead, error) {
 		// owner_name, owner_id, thumbnail, timezone, price_range, plus_code
 		&lead.OwnerName, &lead.OwnerID, &lead.Thumbnail, &lead.Timezone,
 		&lead.PriceRange, &lead.PlusCode,
+		// is_called, called_by, call_response, called_at
+		&isCalled, &lead.CalledBy, &lead.CallResponse, &calledAt,
 		// created_at, updated_at
 		&createdAt, &updatedAt,
 	)
@@ -314,9 +330,12 @@ func scanSupabaseLead(rows *sql.Rows) (Lead, error) {
 		v := hasMetaDesc.Bool
 		lead.HasMetaDesc = &v
 	}
-	if pageSpeedScore.Valid {
-		v := int(pageSpeedScore.Int64)
-		lead.PageSpeedScore = &v
+	if isCalled.Valid {
+		lead.IsCalled = isCalled.Bool
+	}
+	if calledAt.Valid {
+		v := calledAt.Time
+		lead.CalledAt = &v
 	}
 
 	lead.CreatedAt = createdAt

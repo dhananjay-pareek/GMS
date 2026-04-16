@@ -230,6 +230,16 @@ func (c *CombinedDB) UpdateEmails(ctx context.Context, placeID string, emails []
 	return c.local.UpdateEmails(ctx, placeID, emails, isValid)
 }
 
+func (c *CombinedDB) UpdateCallStatus(ctx context.Context, placeID, calledBy, response string) error {
+	err := c.local.UpdateCallStatus(ctx, placeID, calledBy, response)
+	if c.remote != nil {
+		if rerr := c.remote.UpdateCallStatus(ctx, placeID, calledBy, response); rerr != nil {
+			log.Printf("combined_db: supabase UpdateCallStatus error (non-fatal): %v", rerr)
+		}
+	}
+	return err
+}
+
 func max(a, b int) int {
 	if a > b {
 		return a

@@ -123,6 +123,7 @@ func New(
 	mux.HandleFunc("/api/import", mgr.HandleImport)
 	mux.HandleFunc("/api/leads", mgr.HandleLeads)
 	mux.HandleFunc("/api/leads/{place_id}", mgr.HandleLead)
+	mux.HandleFunc("POST /api/leads/{place_id}/call", mgr.HandleUpdateCallStatus)
 	mux.HandleFunc("/api/stats", mgr.HandleStats)
 
 	// On-demand enrichment
@@ -179,16 +180,17 @@ func (s *Server) Addr() string {
 
 // DashboardData holds all data for the dashboard template.
 type DashboardData struct {
-	Leads    []leadsmanager.Lead
-	Stats    *leadsmanager.DashboardStats
-	Total    int
-	Page     int
-	PageSize int
-	Pages    int
-	Search   string
-	City     string
-	Category string
-	Tag      string
+	Leads          []leadsmanager.Lead
+	Stats          *leadsmanager.DashboardStats
+	Total          int
+	Page           int
+	PageSize       int
+	Pages          int
+	Search         string
+	City           string
+	Category       string
+	Tag            string
+	IsCalledFilter string
 }
 
 func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
@@ -236,6 +238,12 @@ func (s *Server) leadRows(w http.ResponseWriter, r *http.Request) {
 		Tag:      q.Get("tag"),
 	}
 
+	isCalledStr := q.Get("is_called")
+	if isCalledStr != "" {
+		v := isCalledStr == "true"
+		filter.IsCalled = &v
+	}
+
 	page, _ := strconv.Atoi(q.Get("page"))
 	if page < 1 {
 		page = 1
@@ -253,15 +261,16 @@ func (s *Server) leadRows(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := DashboardData{
-		Leads:    leads,
-		Total:    total,
-		Page:     page,
-		PageSize: 25,
-		Pages:    pages,
-		Search:   filter.Search,
-		City:     filter.City,
-		Category: filter.Category,
-		Tag:      filter.Tag,
+		Leads:          leads,
+		Total:          total,
+		Page:           page,
+		PageSize:       25,
+		Pages:          pages,
+		Search:         filter.Search,
+		City:           filter.City,
+		Category:       filter.Category,
+		Tag:            filter.Tag,
+		IsCalledFilter: isCalledStr,
 	}
 
 	_ = tmpl.ExecuteTemplate(w, "lead_rows.html", data)
