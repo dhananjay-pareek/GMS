@@ -85,9 +85,14 @@ func (app *ScrapemateApp) Start(ctx context.Context, seedJobs ...scrapemate.IJob
 		for result := range mate.Results() {
 			for _, ch := range writerChans {
 				select {
-				case <-ctx.Done():
-					return ctx.Err()
 				case ch <- result:
+				case <-ctx.Done():
+					// During shutdown, try to push but don't block indefinitely
+					select {
+					case ch <- result:
+					default:
+						// If channel is full, we must drop to avoid deadlock
+					}
 				}
 			}
 		}

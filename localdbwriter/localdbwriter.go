@@ -83,7 +83,10 @@ func (w *writer) Run(ctx context.Context, in <-chan scrapemate.Result) error {
 			}
 		case <-ctx.Done():
 			if len(buffer) > 0 {
-				w.saveBatch(context.Background(), buffer)
+				// We use a background context here because ctx is already done
+				ctxFlush, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				w.saveBatch(ctxFlush, buffer)
+				cancel()
 			}
 			w.db.Close()
 			return ctx.Err()
@@ -102,6 +105,13 @@ func (w *writer) saveBatch(ctx context.Context, entries []gmaps.Entry) error {
 	}
 
 	successCount, err := w.db.BulkUpsertLeads(ctx, leads)
+	if err == context.Canceled || err == context.DeadlineExceeded {
+		// If original context was cancelled mid-save, try one last time with a fresh background context
+		ctxFlush, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		successCount, err = w.db.BulkUpsertLeads(ctxFlush, leads)
+	}
+
 	if err != nil {
 		log.Printf("local leads bulk upsert error: %v", err)
 	}

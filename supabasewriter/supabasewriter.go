@@ -99,7 +99,10 @@ func (w *writer) Run(ctx context.Context, in <-chan scrapemate.Result) error {
 			}
 		case <-ctx.Done():
 			if len(buffer) > 0 {
-				w.saveBatch(context.Background(), buffer)
+				// We use a background context here because ctx is already done
+				ctxFlush, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				w.saveBatch(ctxFlush, buffer)
+				cancel()
 			}
 			w.db.Close()
 			return ctx.Err()
@@ -210,13 +213,25 @@ ON CONFLICT (place_id) DO UPDATE SET
   plus_code = EXCLUDED.plus_code,
   updated_at = EXCLUDED.updated_at`, strings.Join(placeholders, ","))
 
-	_, err := w.db.ExecContext(ctx, query, args...)
+	err := w.save(ctx, query, args...)
+	if err == context.Canceled || err == context.DeadlineExceeded {
+		// If original context was cancelled mid-save, try one last time with a fresh background context
+		ctxFlush, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		err = w.save(ctxFlush, query, args...)
+	}
+
 	if err != nil {
 		return fmt.Errorf("supabase batch upsert error: %w", err)
 	}
 
 	log.Printf("supabase: batch saved %d leads", len(leads))
 	return nil
+}
+
+func (w *writer) save(ctx context.Context, query string, args ...any) error {
+	_, err := w.db.ExecContext(ctx, query, args...)
+	return err
 }
 
 // pqStringArray formats a Go string slice as a PostgreSQL text[] literal.

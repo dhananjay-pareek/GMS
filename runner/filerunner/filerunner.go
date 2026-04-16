@@ -135,25 +135,38 @@ func (r *fileRunner) setInput() error {
 }
 
 func (r *fileRunner) setWriters() error {
-	localWriter, err := localdbwriter.New(context.Background(), r.cfg.LeadsDBPath)
-	if err != nil {
-		return fmt.Errorf("create local leads db writer: %w", err)
-	}
+	var writers []scrapemate.ResultWriter
 
-	var resultWriter scrapemate.ResultWriter = localWriter
+	disableLocal := os.Getenv("DISABLE_LOCAL_DB") == "true"
+	var localWriter scrapemate.ResultWriter
+
+	if !disableLocal {
+		lWriter, err := localdbwriter.New(context.Background(), r.cfg.LeadsDBPath)
+		if err != nil {
+			return fmt.Errorf("create local leads db writer: %w", err)
+		}
+		localWriter = lWriter
+		writers = append(writers, localWriter)
+	} else {
+		log.Println("Local DB writer disabled via DISABLE_LOCAL_DB")
+	}
 
 	// If DATABASE_URL is set, also write to Supabase
 	if r.cfg.Dsn != "" {
 		sbWriter, sbErr := supabasewriter.New(r.cfg.Dsn)
 		if sbErr != nil {
-			log.Printf("WARNING: supabase writer init failed: %v (continuing with local only)", sbErr)
+			log.Printf("WARNING: supabase writer init failed: %v", sbErr)
 		} else {
-			log.Println("Supabase writer enabled — dual storage active")
-			resultWriter = newMultiWriter(localWriter, sbWriter)
+			log.Println("Supabase writer enabled")
+			writers = append(writers, sbWriter)
 		}
 	}
 
-	r.writers = []scrapemate.ResultWriter{resultWriter}
+	if len(writers) == 1 {
+		r.writers = writers
+	} else {
+		r.writers = []scrapemate.ResultWriter{runner.NewMultiWriter(writers...)}
+	}
 
 	return nil
 }

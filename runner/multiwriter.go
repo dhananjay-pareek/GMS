@@ -1,4 +1,4 @@
-package filerunner
+package runner
 
 import (
 	"context"
@@ -10,7 +10,7 @@ type multiWriter struct {
 	writers []scrapemate.ResultWriter
 }
 
-func newMultiWriter(w ...scrapemate.ResultWriter) scrapemate.ResultWriter {
+func NewMultiWriter(w ...scrapemate.ResultWriter) scrapemate.ResultWriter {
 	return &multiWriter{writers: w}
 }
 
@@ -29,7 +29,13 @@ func (m *multiWriter) Run(ctx context.Context, in <-chan scrapemate.Result) erro
 		for _, ch := range chans {
 			select {
 			case <-ctx.Done():
-				return ctx.Err()
+				// If context is cancelled, try to push but don't block forever
+				// We use a small buffer or just try once
+				select {
+				case ch <- result:
+				default:
+					// Drop if channel is full and we are shutting down
+				}
 			case ch <- result:
 			}
 		}
