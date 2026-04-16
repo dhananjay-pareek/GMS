@@ -240,6 +240,14 @@ func (c *CombinedDB) UpdateCallStatus(ctx context.Context, placeID, calledBy, re
 	return err
 }
 
+func (c *CombinedDB) KeepAlive(ctx context.Context) error {
+	_ = c.local.KeepAlive(ctx)
+	if c.remote != nil {
+		return c.remote.KeepAlive(ctx)
+	}
+	return nil
+}
+
 func max(a, b int) int {
 	if a > b {
 		return a

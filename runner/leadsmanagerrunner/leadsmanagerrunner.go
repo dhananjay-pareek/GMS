@@ -17,8 +17,9 @@ import (
 )
 
 type leadsManagerRunner struct {
-	db  *leadsmanager.DB
-	srv *web_leadsmanager.Server
+	db    *leadsmanager.DB
+	srv   *web_leadsmanager.Server
+	store leadsmanager.LeadStore
 }
 
 func New(ctx context.Context, cfg *runner.Config) (runner.Runner, error) {
@@ -72,8 +73,9 @@ func New(ctx context.Context, cfg *runner.Config) (runner.Runner, error) {
 	}
 
 	return &leadsManagerRunner{
-		db:  localDB,
-		srv: srv,
+		db:    localDB,
+		srv:   srv,
+		store: store,
 	}, nil
 }
 
@@ -90,6 +92,24 @@ func (l *leadsManagerRunner) Run(ctx context.Context) error {
 			}
 		}
 		openBrowserApp(url)
+	}()
+
+	// Start background keep-alive loop for Supabase (every 1 hour)
+	go func() {
+		ticker := time.NewTicker(1 * time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if err := l.store.KeepAlive(ctx); err != nil {
+					log.Printf("Background Keep-Alive failed: %v", err)
+				} else {
+					log.Println("Background Keep-Alive: Supabase connection pinged successfully")
+				}
+			}
+		}
 	}()
 
 	return l.srv.Start(ctx)

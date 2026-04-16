@@ -19,6 +19,19 @@ type SupabaseDB struct {
 
 // NewSupabaseDB opens a connection to the Supabase Postgres instance.
 func NewSupabaseDB(dsn string) (*SupabaseDB, error) {
+	// Force simple protocol to avoid "prepared statement already exists" errors
+	// with Supabase connection pooler (port 6543 / transaction mode).
+	if !strings.Contains(dsn, "default_query_exec_mode") {
+		sep := " "
+		if strings.HasPrefix(dsn, "postgres://") || strings.HasPrefix(dsn, "postgresql://") {
+			sep = "?"
+			if strings.Contains(dsn, "?") {
+				sep = "&"
+			}
+		}
+		dsn += sep + "default_query_exec_mode=simple_protocol"
+	}
+
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("supabase_db: open: %w", err)
@@ -33,8 +46,22 @@ func NewSupabaseDB(dsn string) (*SupabaseDB, error) {
 		return nil, fmt.Errorf("supabase_db: ping: %w", err)
 	}
 
-	log.Println("supabase_db: connected to Supabase Postgres")
+	log.Println("supabase_db: connected to Supabase Postgres (simple protocol enforced)")
 	return &SupabaseDB{pool: db}, nil
+}
+
+// KeepAlive performs a simple query to keep the connection active.
+func (s *SupabaseDB) KeepAlive(ctx context.Context) error {
+	if s == nil || s.pool == nil {
+		return nil
+	}
+	var one int
+	err := s.pool.QueryRowContext(ctx, "SELECT 1").Scan(&one)
+	if err != nil {
+		log.Printf("supabase_db: KeepAlive ping failed: %v", err)
+		return err
+	}
+	return nil
 }
 
 func (s *SupabaseDB) Close() {

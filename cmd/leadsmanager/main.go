@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/gosom/google-maps-scraper/internal/leadsmanager"
 	"github.com/gosom/google-maps-scraper/web_leadsmanager"
@@ -93,6 +94,24 @@ func main() {
 	}
 
 	log.Printf("Leads Manager starting on http://localhost%s\n", port)
+
+	// Start background keep-alive loop for Supabase (every 1 hour)
+	go func() {
+		ticker := time.NewTicker(1 * time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if err := store.KeepAlive(ctx); err != nil {
+					log.Printf("Background Keep-Alive failed: %v", err)
+				} else {
+					log.Println("Background Keep-Alive: Supabase connection pinged successfully")
+				}
+			}
+		}
+	}()
 
 	if err := srv.Start(ctx); err != nil {
 		fmt.Fprintf(os.Stderr, "Server error: %v\n", err)

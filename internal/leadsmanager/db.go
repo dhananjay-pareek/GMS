@@ -83,6 +83,7 @@ type LeadStore interface {
 	UpdatePageSpeedScore(ctx context.Context, placeID string, score int) error
 	UpdateEmails(ctx context.Context, placeID string, emails []string, isValid bool) error
 	UpdateCallStatus(ctx context.Context, placeID, calledBy, response string) error
+	KeepAlive(ctx context.Context) error
 	Close()
 }
 
@@ -136,6 +137,13 @@ func (db *DB) Close() {
 	if db != nil && db.pool != nil {
 		_ = db.pool.Close()
 	}
+}
+
+func (db *DB) KeepAlive(ctx context.Context) error {
+	if db == nil || db.pool == nil {
+		return nil
+	}
+	return db.pool.PingContext(ctx)
 }
 
 func (db *DB) initSchema(ctx context.Context) error {
