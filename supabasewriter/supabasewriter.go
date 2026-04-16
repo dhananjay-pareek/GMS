@@ -112,15 +112,13 @@ func (w *writer) saveBatch(ctx context.Context, leads []leadsmanager.Lead) error
 		return nil
 	}
 
-	tx, err := w.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback() }()
+	const numCols = 40
+	now := time.Now().UTC()
 
-	successCount := 0
-	for _, lead := range leads {
-		now := time.Now().UTC()
+	var placeholders []string
+	var args []any
+
+	for i, lead := range leads {
 		if lead.CreatedAt.IsZero() {
 			lead.CreatedAt = now
 		}
@@ -142,7 +140,28 @@ func (w *writer) saveBatch(ctx context.Context, leads []leadsmanager.Lead) error
 			lead.SocialLinks = "{}"
 		}
 
-		_, err := tx.ExecContext(ctx, `
+		rowPlaceholders := make([]string, numCols)
+		for j := 0; j < numCols; j++ {
+			rowPlaceholders[j] = fmt.Sprintf("$%d", i*numCols+j+1)
+		}
+		placeholders = append(placeholders, "("+strings.Join(rowPlaceholders, ",")+")")
+
+		args = append(args,
+			lead.PlaceID, lead.Title, lead.Category, pqStringArray(lead.Categories),
+			lead.Address, lead.City, lead.State, lead.Country, lead.PostalCode,
+			lead.Phone, pqStringArray(lead.Emails), lead.Website,
+			lead.ReviewCount, lead.ReviewRating, lead.Latitude, lead.Longitude,
+			lead.GmapsLink, lead.Cid, lead.Status, lead.Description,
+			pqStringArray(lead.ServiceTags), lead.IsEmailValid, lead.IsPhoneValid,
+			lead.GmbClaimed, lead.HasSSL, lead.HasAnalytics, lead.HasFacebookPixel,
+			lead.HasH1, lead.HasMetaDesc, lead.PageSpeedScore,
+			pqStringArray(lead.TechStack), marshalJSON(lead.SocialLinks),
+			lead.OwnerName, lead.OwnerID, lead.Thumbnail, lead.Timezone,
+			lead.PriceRange, lead.PlusCode, lead.CreatedAt, lead.UpdatedAt,
+		)
+	}
+
+	query := fmt.Sprintf(`
 INSERT INTO public.gmaps_leads (
   place_id, title, category, categories, address, city, state, country, postal_code,
   phone, emails, website, review_count, review_rating, latitude, longitude, gmaps_link,
@@ -150,10 +169,7 @@ INSERT INTO public.gmaps_leads (
   has_ssl, has_analytics, has_facebook_pixel, has_h1, has_meta_desc, page_speed_score,
   tech_stack, social_links, owner_name, owner_id, thumbnail, timezone, price_range,
   plus_code, created_at, updated_at
-) VALUES (
-  $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
-  $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40
-)
+) VALUES %s
 ON CONFLICT (place_id) DO UPDATE SET
   title = EXCLUDED.title,
   category = EXCLUDED.category,
@@ -192,60 +208,14 @@ ON CONFLICT (place_id) DO UPDATE SET
   timezone = EXCLUDED.timezone,
   price_range = EXCLUDED.price_range,
   plus_code = EXCLUDED.plus_code,
-  updated_at = EXCLUDED.updated_at`,
-			lead.PlaceID,
-			lead.Title,
-			lead.Category,
-			pqStringArray(lead.Categories),
-			lead.Address,
-			lead.City,
-			lead.State,
-			lead.Country,
-			lead.PostalCode,
-			lead.Phone,
-			pqStringArray(lead.Emails),
-			lead.Website,
-			lead.ReviewCount,
-			lead.ReviewRating,
-			lead.Latitude,
-			lead.Longitude,
-			lead.GmapsLink,
-			lead.Cid,
-			lead.Status,
-			lead.Description,
-			pqStringArray(lead.ServiceTags),
-			lead.IsEmailValid,
-			lead.IsPhoneValid,
-			lead.GmbClaimed,
-			lead.HasSSL,
-			lead.HasAnalytics,
-			lead.HasFacebookPixel,
-			lead.HasH1,
-			lead.HasMetaDesc,
-			lead.PageSpeedScore,
-			pqStringArray(lead.TechStack),
-			marshalJSON(lead.SocialLinks),
-			lead.OwnerName,
-			lead.OwnerID,
-			lead.Thumbnail,
-			lead.Timezone,
-			lead.PriceRange,
-			lead.PlusCode,
-			lead.CreatedAt,
-			lead.UpdatedAt,
-		)
-		if err == nil {
-			successCount++
-		} else {
-			log.Printf("supabase upsert error for %s: %v", lead.PlaceID, err)
-		}
+  updated_at = EXCLUDED.updated_at`, strings.Join(placeholders, ","))
+
+	_, err := w.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("supabase batch upsert error: %w", err)
 	}
 
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-
-	log.Printf("supabase: saved %d/%d leads", successCount, len(leads))
+	log.Printf("supabase: batch saved %d leads", len(leads))
 	return nil
 }
 
