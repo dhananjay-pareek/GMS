@@ -23,6 +23,17 @@ type writer struct {
 // New creates a ResultWriter that persists scraped entries into a
 // Supabase-hosted PostgreSQL table (public.gmaps_leads).
 func New(dsn string) (scrapemate.ResultWriter, error) {
+	if !strings.Contains(dsn, "default_query_exec_mode") {
+		sep := " "
+		if strings.HasPrefix(dsn, "postgres://") || strings.HasPrefix(dsn, "postgresql://") {
+			sep = "?"
+			if strings.Contains(dsn, "?") {
+				sep = "&"
+			}
+		}
+		dsn += sep + "default_query_exec_mode=simple_protocol"
+	}
+
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("supabasewriter: open db: %w", err)
@@ -43,6 +54,7 @@ func New(dsn string) (scrapemate.ResultWriter, error) {
 func (w *writer) Run(ctx context.Context, in <-chan scrapemate.Result) error {
 	const batchSize = 50
 	var buffer []leadsmanager.Lead
+	defer w.db.Close()
 
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
@@ -77,34 +89,48 @@ func (w *writer) Run(ctx context.Context, in <-chan scrapemate.Result) error {
 		}
 	}
 
+	flush := func(flushCtx context.Context) error {
+		if len(buffer) == 0 {
+			return nil
+		}
+
+		if err := w.saveBatch(flushCtx, buffer); err != nil {
+			return err
+		}
+
+		buffer = buffer[:0]
+		return nil
+	}
+
 	for {
 		select {
 		case result, ok := <-in:
 			if !ok {
-				if len(buffer) > 0 {
-					w.saveBatch(context.Background(), buffer)
+				if err := flush(context.Background()); err != nil {
+					return err
 				}
-				w.db.Close()
 				return nil
 			}
 			processData(result.Data)
 			if len(buffer) >= batchSize {
-				w.saveBatch(ctx, buffer)
-				buffer = buffer[:0]
+				if err := flush(ctx); err != nil {
+					return err
+				}
 			}
 		case <-ticker.C:
-			if len(buffer) > 0 {
-				w.saveBatch(ctx, buffer)
-				buffer = buffer[:0]
+			if err := flush(ctx); err != nil {
+				return err
 			}
 		case <-ctx.Done():
 			if len(buffer) > 0 {
-				// We use a background context here because ctx is already done
+				// We use a background context here because ctx is already done.
 				ctxFlush, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-				w.saveBatch(ctxFlush, buffer)
+				err := flush(ctxFlush)
 				cancel()
+				if err != nil {
+					return err
+				}
 			}
-			w.db.Close()
 			return ctx.Err()
 		}
 	}
@@ -115,34 +141,84 @@ func (w *writer) saveBatch(ctx context.Context, leads []leadsmanager.Lead) error
 		return nil
 	}
 
-	const numCols = 40
 	now := time.Now().UTC()
+	normalized := make([]leadsmanager.Lead, 0, len(leads))
+	for _, lead := range leads {
+		normalized = append(normalized, normalizeLeadForSupabase(lead, now))
+	}
+
+	query, args := buildInsertQueryAndArgs(normalized)
+	err := w.save(ctx, query, args...)
+	if err == context.Canceled || err == context.DeadlineExceeded {
+		// If original context was cancelled mid-save, try one last time with a fresh background context.
+		ctxFlush, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		err = w.save(ctxFlush, query, args...)
+	}
+	if err == nil {
+		log.Printf("supabase: batch saved %d leads", len(leads))
+		return nil
+	}
+
+	log.Printf("supabase: batch upsert failed, falling back to per-row writes: %v", err)
+
+	fallbackCtx := ctx
+	fallbackCancel := func() {}
+	if err == context.Canceled || err == context.DeadlineExceeded {
+		fallbackCtx, fallbackCancel = context.WithTimeout(context.Background(), 10*time.Second)
+	}
+	defer fallbackCancel()
+
+	var successCount int
+	for _, lead := range normalized {
+		singleQuery, singleArgs := buildInsertQueryAndArgs([]leadsmanager.Lead{lead})
+		if execErr := w.save(fallbackCtx, singleQuery, singleArgs...); execErr != nil {
+			log.Printf("supabase: single lead upsert failed for %s: %v", lead.PlaceID, execErr)
+			continue
+		}
+		successCount++
+	}
+
+	if successCount == 0 {
+		return fmt.Errorf("supabase: failed to save any leads after batch fallback: %w", err)
+	}
+
+	log.Printf("supabase: saved %d/%d leads after fallback", successCount, len(leads))
+	return nil
+}
+
+func normalizeLeadForSupabase(lead leadsmanager.Lead, now time.Time) leadsmanager.Lead {
+	if lead.CreatedAt.IsZero() {
+		lead.CreatedAt = now
+	}
+	lead.UpdatedAt = now
+
+	if lead.Categories == nil {
+		lead.Categories = []string{}
+	}
+	if lead.Emails == nil {
+		lead.Emails = []string{}
+	}
+	if lead.ServiceTags == nil {
+		lead.ServiceTags = []string{}
+	}
+	if lead.TechStack == nil {
+		lead.TechStack = []string{}
+	}
+	if lead.SocialLinks == "" {
+		lead.SocialLinks = "{}"
+	}
+
+	return lead
+}
+
+func buildInsertQueryAndArgs(leads []leadsmanager.Lead) (string, []any) {
+	const numCols = 40
 
 	var placeholders []string
-	var args []any
+	args := make([]any, 0, len(leads)*numCols)
 
 	for i, lead := range leads {
-		if lead.CreatedAt.IsZero() {
-			lead.CreatedAt = now
-		}
-		lead.UpdatedAt = now
-
-		if lead.Categories == nil {
-			lead.Categories = []string{}
-		}
-		if lead.Emails == nil {
-			lead.Emails = []string{}
-		}
-		if lead.ServiceTags == nil {
-			lead.ServiceTags = []string{}
-		}
-		if lead.TechStack == nil {
-			lead.TechStack = []string{}
-		}
-		if lead.SocialLinks == "" {
-			lead.SocialLinks = "{}"
-		}
-
 		rowPlaceholders := make([]string, numCols)
 		for j := 0; j < numCols; j++ {
 			rowPlaceholders[j] = fmt.Sprintf("$%d", i*numCols+j+1)
@@ -213,20 +289,7 @@ ON CONFLICT (place_id) DO UPDATE SET
   plus_code = EXCLUDED.plus_code,
   updated_at = EXCLUDED.updated_at`, strings.Join(placeholders, ","))
 
-	err := w.save(ctx, query, args...)
-	if err == context.Canceled || err == context.DeadlineExceeded {
-		// If original context was cancelled mid-save, try one last time with a fresh background context
-		ctxFlush, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		err = w.save(ctxFlush, query, args...)
-	}
-
-	if err != nil {
-		return fmt.Errorf("supabase batch upsert error: %w", err)
-	}
-
-	log.Printf("supabase: batch saved %d leads", len(leads))
-	return nil
+	return query, args
 }
 
 func (w *writer) save(ctx context.Context, query string, args ...any) error {

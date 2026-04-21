@@ -169,6 +169,70 @@ LIMIT ` + fmt.Sprintf("$%d", paramIdx) + ` OFFSET ` + fmt.Sprintf("$%d", paramId
 	return leads, total, nil
 }
 
+func (s *SupabaseDB) GetCities(ctx context.Context) ([]string, error) {
+	const query = `
+SELECT city
+FROM (
+	SELECT DISTINCT BTRIM(city) AS city
+	FROM public.gmaps_leads
+	WHERE BTRIM(city) <> ''
+) AS city_options
+ORDER BY LOWER(city) ASC`
+
+	rows, err := s.pool.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("supabase_db GetCities query: %w", err)
+	}
+	defer rows.Close()
+
+	cities := make([]string, 0)
+	for rows.Next() {
+		var city string
+		if err := rows.Scan(&city); err != nil {
+			return nil, fmt.Errorf("supabase_db GetCities scan: %w", err)
+		}
+		cities = append(cities, city)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("supabase_db GetCities rows: %w", err)
+	}
+
+	return cities, nil
+}
+
+func (s *SupabaseDB) GetCategories(ctx context.Context) ([]string, error) {
+	const query = `
+SELECT category
+FROM (
+	SELECT DISTINCT BTRIM(category) AS category
+	FROM public.gmaps_leads
+	WHERE BTRIM(category) <> ''
+) AS category_options
+ORDER BY LOWER(category) ASC`
+
+	rows, err := s.pool.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("supabase_db GetCategories query: %w", err)
+	}
+	defer rows.Close()
+
+	categories := make([]string, 0)
+	for rows.Next() {
+		var category string
+		if err := rows.Scan(&category); err != nil {
+			return nil, fmt.Errorf("supabase_db GetCategories scan: %w", err)
+		}
+		categories = append(categories, category)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("supabase_db GetCategories rows: %w", err)
+	}
+
+	return categories, nil
+}
+
 // GetLead fetches a single lead from Supabase by place_id.
 func (s *SupabaseDB) GetLead(ctx context.Context, placeID string) (*Lead, error) {
 	q := `SELECT ` + supabaseSelectCols + `

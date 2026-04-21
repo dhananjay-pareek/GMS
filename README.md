@@ -99,7 +99,7 @@ Optional flags:
 - `-leads-manager-addr :9090` to change the bind address (default `:9090`)
 - `-leads-db-path webdata\leadsmanager.db` to change local SQLite path (default `webdata\leadsmanager.db`)
 
-Scraped results are written only to the local Leads DB automatically in both file mode and web mode.
+Scraped results are written to the local Leads DB automatically in both file mode and web mode. In web mode, each finished job also gets a downloadable CSV in the data folder so the Download button works.
 
 ## Run both Web UI and Leads Manager together (default)
 

@@ -74,6 +74,8 @@ type LeadFilter struct {
 // *SupabaseDB (Postgres), and *CombinedDB.
 type LeadStore interface {
 	FetchLeads(ctx context.Context, filter LeadFilter, page, pageSize int) ([]Lead, int, error)
+	GetCities(ctx context.Context) ([]string, error)
+	GetCategories(ctx context.Context) ([]string, error)
 	GetLead(ctx context.Context, placeID string) (*Lead, error)
 	GetStats(ctx context.Context) (*DashboardStats, error)
 	GetCompetitors(ctx context.Context, city string, minRating float64) ([]Lead, error)
@@ -448,6 +450,56 @@ LIMIT ? OFFSET ?`
 	}
 
 	return leads, total, rows.Err()
+}
+
+func (db *DB) GetCities(ctx context.Context) ([]string, error) {
+	const query = `
+SELECT DISTINCT TRIM(city) AS city
+FROM gmaps_leads
+WHERE TRIM(city) <> ''
+ORDER BY LOWER(TRIM(city)) ASC`
+
+	rows, err := db.pool.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	cities := make([]string, 0)
+	for rows.Next() {
+		var city string
+		if err := rows.Scan(&city); err != nil {
+			return nil, err
+		}
+		cities = append(cities, city)
+	}
+
+	return cities, rows.Err()
+}
+
+func (db *DB) GetCategories(ctx context.Context) ([]string, error) {
+	const query = `
+SELECT DISTINCT TRIM(category) AS category
+FROM gmaps_leads
+WHERE TRIM(category) <> ''
+ORDER BY LOWER(TRIM(category)) ASC`
+
+	rows, err := db.pool.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	categories := make([]string, 0)
+	for rows.Next() {
+		var category string
+		if err := rows.Scan(&category); err != nil {
+			return nil, err
+		}
+		categories = append(categories, category)
+	}
+
+	return categories, rows.Err()
 }
 
 func (db *DB) GetLead(ctx context.Context, placeID string) (*Lead, error) {

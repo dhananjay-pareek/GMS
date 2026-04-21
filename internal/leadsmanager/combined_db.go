@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"sort"
+	"strings"
 	"sync"
 )
 
@@ -114,6 +115,102 @@ func (c *CombinedDB) FetchLeads(ctx context.Context, filter LeadFilter, page, pa
 	}
 
 	return merged[offset:end], total, nil
+}
+
+func (c *CombinedDB) GetCategories(ctx context.Context) ([]string, error) {
+	localCategories, err := c.local.GetCategories(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if c.remote == nil {
+		return localCategories, nil
+	}
+
+	remoteCategories, err := c.remote.GetCategories(ctx)
+	if err != nil {
+		log.Printf("combined_db: supabase GetCategories error (non-fatal): %v", err)
+		return localCategories, nil
+	}
+
+	seen := make(map[string]struct{}, len(localCategories)+len(remoteCategories))
+	merged := make([]string, 0, len(localCategories)+len(remoteCategories))
+	for _, category := range localCategories {
+		key := categoryKey(category)
+		if key == "" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		merged = append(merged, category)
+	}
+	for _, category := range remoteCategories {
+		key := categoryKey(category)
+		if key == "" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		merged = append(merged, category)
+	}
+
+	sort.Slice(merged, func(i, j int) bool {
+		return strings.ToLower(merged[i]) < strings.ToLower(merged[j])
+	})
+
+	return merged, nil
+}
+
+func (c *CombinedDB) GetCities(ctx context.Context) ([]string, error) {
+	localCities, err := c.local.GetCities(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if c.remote == nil {
+		return localCities, nil
+	}
+
+	remoteCities, err := c.remote.GetCities(ctx)
+	if err != nil {
+		log.Printf("combined_db: supabase GetCities error (non-fatal): %v", err)
+		return localCities, nil
+	}
+
+	seen := make(map[string]struct{}, len(localCities)+len(remoteCities))
+	merged := make([]string, 0, len(localCities)+len(remoteCities))
+	for _, city := range localCities {
+		key := optionKey(city)
+		if key == "" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		merged = append(merged, city)
+	}
+	for _, city := range remoteCities {
+		key := optionKey(city)
+		if key == "" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		merged = append(merged, city)
+	}
+
+	sort.Slice(merged, func(i, j int) bool {
+		return strings.ToLower(merged[i]) < strings.ToLower(merged[j])
+	})
+
+	return merged, nil
 }
 
 // GetLead tries local first, then Supabase.
@@ -253,4 +350,12 @@ func max(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func categoryKey(v string) string {
+	return strings.ToLower(strings.TrimSpace(v))
+}
+
+func optionKey(v string) string {
+	return strings.ToLower(strings.TrimSpace(v))
 }

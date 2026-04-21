@@ -56,9 +56,9 @@
         <!-- Views Toggle -->
         <div class="views-toggle-container">
             <div class="views-toggle">
-                <button type="button" class="view-btn active" id="btn-view-new" onclick="switchView('false')">New
+                <button type="button" class="view-btn{{if .ShowNew}} active{{end}}" id="btn-view-new" onclick="switchView('false')">New
                     Leads</button>
-                <button type="button" class="view-btn" id="btn-view-called" onclick="switchView('true')">Called
+                <button type="button" class="view-btn{{if .ShowCalled}} active{{end}}" id="btn-view-called" onclick="switchView('true')">Called
                     Leads</button>
             </div>
         </div>
@@ -67,27 +67,38 @@
         <section class="card filter-bar">
             <form id="filter-form" hx-get="/lead-rows" hx-target="#leads-tbody" hx-swap="innerHTML" hx-trigger="submit"
                 hx-push-url="false" hx-indicator="#table-spinner">
-                <input type="hidden" name="is_called" id="filter-is-called" value="false">
+                <input type="hidden" name="is_called" id="filter-is-called" value="{{.IsCalled}}">
                 <div class="filter-row">
                     <input type="text" name="search" id="filter-search" placeholder="🔍 Search leads..."
-                        class="filter-input filter-input-wide" />
-                    <input type="text" name="city" id="filter-city" placeholder="City" class="filter-input" />
-                    <input type="text" name="category" id="filter-category" placeholder="Category"
-                        class="filter-input" />
+                        class="filter-input filter-input-wide" value="{{.Search}}" />
+                    <label for="filter-city" class="sr-only">Filter by City</label>
+                    <select name="city" id="filter-city" class="filter-input" aria-label="Filter by City">
+                        <option value="">All Cities</option>
+                        {{range .CityGroups}}
+                        <optgroup label="{{.Label}}">
+                            {{range .Options}}
+                            <option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Value}}</option>
+                            {{end}}
+                        </optgroup>
+                        {{end}}
+                    </select>
+                    <label for="filter-category" class="sr-only">Filter by Category</label>
+                    <select name="category" id="filter-category" class="filter-input" aria-label="Filter by Category">
+                        <option value="">All Categories</option>
+                        {{range .CategoryGroups}}
+                        <optgroup label="{{.Label}}">
+                            {{range .Options}}
+                            <option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Value}}</option>
+                            {{end}}
+                        </optgroup>
+                        {{end}}
+                    </select>
                     <label for="filter-tag" class="sr-only">Filter by Tag</label>
                     <select name="tag" id="filter-tag" class="filter-input" aria-label="Filter by Service Tag">
                         <option value="">All Tags</option>
-                        <option value="No Website">No Website</option>
-                        <option value="No SSL">No SSL</option>
-                        <option value="No Analytics">No Analytics</option>
-                        <option value="Missing Pixel">Missing Pixel</option>
-                        <option value="Needs SEO">Needs SEO</option>
-                        <option value="Low Rating">Low Rating</option>
-                        <option value="Few Reviews">Few Reviews</option>
-                        <option value="Unclaimed GMB">Unclaimed GMB</option>
-                        <option value="No Email">No Email</option>
-                        <option value="No Phone">No Phone</option>
-                        <option value="Slow Website">Slow Website</option>
+                        {{range .TagOptions}}
+                        <option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Value}}</option>
+                        {{end}}
                     </select>
                     <button type="submit" class="btn-filter">Filter</button>
                     <button type="button" class="btn-filter-clear" onclick="clearFilters()">Clear</button>
@@ -108,7 +119,7 @@
                             <th>Lead Details</th>
                         </tr>
                     </thead>
-                    <tbody id="leads-tbody" hx-get="/lead-rows?is_called=false" hx-trigger="load" hx-swap="innerHTML"
+                    <tbody id="leads-tbody" hx-get="{{.InitialLeadRowsURL}}" hx-trigger="load" hx-swap="innerHTML"
                         hx-indicator="#table-spinner">
                     </tbody>
                 </table>
