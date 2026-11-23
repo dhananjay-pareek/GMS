@@ -3,9 +3,13 @@ package databaserunner
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
+	"strings"
+	"time"
 
 	// postgres driver
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -44,6 +48,12 @@ func New(cfg *runner.Config) (runner.Runner, error) {
 
 	if ans.produce {
 		return &ans, nil
+	}
+
+	if reclaimed, reclaimErr := finalizeQueuedJobs(conn, "startup reset"); reclaimErr != nil {
+		return nil, reclaimErr
+	} else if reclaimed > 0 {
+		log.Printf("databaserunner: finalized %d stale queued jobs on startup", reclaimed)
 	}
 
 	psqlWriter := postgres.NewResultWriter(conn)
@@ -111,16 +121,31 @@ func (d *dbrunner) Run(ctx context.Context) error {
 	return d.app.Start(ctx)
 }
 
+
 func (d *dbrunner) Close(context.Context) error {
+	var closeErr error
+
 	if d.app != nil {
-		return d.app.Close()
+		if err := d.app.Close(); err != nil {
+			closeErr = errors.Join(closeErr, err)
+		}
+	}
+
+	if !d.produce && d.conn != nil {
+		if finalized, err := finalizeQueuedJobs(d.conn, "shutdown"); err != nil {
+			closeErr = errors.Join(closeErr, err)
+		} else if finalized > 0 {
+			log.Printf("databaserunner: finalized %d queued jobs on shutdown", finalized)
+		}
 	}
 
 	if d.conn != nil {
-		return d.conn.Close()
+		if err := d.conn.Close(); err != nil {
+			closeErr = errors.Join(closeErr, err)
+		}
 	}
 
-	return nil
+	return closeErr
 }
 
 func (d *dbrunner) produceSeedJobs(ctx context.Context) error {
@@ -171,6 +196,17 @@ func (d *dbrunner) produceSeedJobs(ctx context.Context) error {
 }
 
 func openPsqlConn(dsn string) (conn *sql.DB, err error) {
+	if !strings.Contains(dsn, "default_query_exec_mode") {
+		sep := " "
+		if strings.HasPrefix(dsn, "postgres://") || strings.HasPrefix(dsn, "postgresql://") {
+			sep = "?"
+			if strings.Contains(dsn, "?") {
+				sep = "&"
+			}
+		}
+		dsn += sep + "default_query_exec_mode=simple_protocol"
+	}
+
 	conn, err = sql.Open("pgx", dsn)
 	if err != nil {
 		return
@@ -185,3 +221,27 @@ func openPsqlConn(dsn string) (conn *sql.DB, err error) {
 
 	return
 }
+
+func finalizeQueuedJobs(conn *sql.DB, reason string) (int64, error) {
+	const q = `
+		UPDATE gmaps_jobs
+		SET status = 'failed'
+		WHERE status = 'queued'
+	`
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	res, err := conn.ExecContext(ctx, q)
+	if err != nil {
+		return 0, fmt.Errorf("finalize queued jobs (%s): %w", reason, err)
+	}
+
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("rows affected (%s): %w", reason, err)
+	}
+
+	return affected, nil
+}
+

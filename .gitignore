@@ -29,3 +29,8 @@ temp*.html
 dist/
 build/
 .env
+
+*.log
+*.db-shm
+*.db-wal
+

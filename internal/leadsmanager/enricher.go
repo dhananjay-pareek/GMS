@@ -407,78 +407,93 @@ func (e *Enricher) GeneratePitchPrompt(ctx context.Context, placeID, persona, ap
 		return "", err
 	}
 
-	var issues []string
-	for _, tag := range lead.ServiceTags {
-		switch tag {
-		case "No Website":
-			issues = append(issues, "They don't have a website at all")
-		case "No SSL":
-			issues = append(issues, "Their website lacks SSL/HTTPS security")
-		case "No Analytics":
-			issues = append(issues, "They have no Google Analytics tracking")
-		case "Missing Pixel":
-			issues = append(issues, "They're missing Facebook Pixel for ad tracking")
-		case "Needs SEO":
-			issues = append(issues, "Their website has SEO issues (missing H1 tags or meta descriptions)")
-		case "Low Rating":
-			issues = append(issues, fmt.Sprintf("They have a low Google rating of %.1f stars", lead.ReviewRating))
-		case "Few Reviews":
-			issues = append(issues, fmt.Sprintf("They only have %d Google reviews", lead.ReviewCount))
-		case "Unclaimed GMB":
-			issues = append(issues, "Their Google Business Profile appears to be unclaimed")
-		case "Slow Website":
-			issues = append(issues, "Their website is slow (poor PageSpeed score)")
-		}
+	persona = strings.TrimSpace(persona)
+	if persona == "" {
+		persona = "marketing consultant"
 	}
+
+	issues := buildLeadIssues(lead)
 
 	techStr := "unknown"
 	if len(lead.TechStack) > 0 {
 		techStr = strings.Join(lead.TechStack, ", ")
 	}
 
+	website := strings.TrimSpace(lead.Website)
+	if website == "" {
+		website = "No website listed"
+	}
+
+	businessName := strings.TrimSpace(lead.Title)
+	if businessName == "" {
+		businessName = "this business"
+	}
+
+	location := strings.Trim(strings.Join([]string{strings.TrimSpace(lead.City), strings.TrimSpace(lead.Country)}, ", "), ", ")
+	if location == "" {
+		location = "Unknown location"
+	}
+
+	category := strings.TrimSpace(lead.Category)
+	if category == "" {
+		category = "Local business"
+	}
+
 	// Fetch market leaders (competitors in same city + category with high ratings)
 	competitorSection := e.buildCompetitorAnalysis(ctx, lead)
+	if competitorSection == "" {
+		competitorSection = "Competitive Analysis: Not enough competitor data available for this category and location."
+	}
 
-	prompt := fmt.Sprintf(`You are a %s at a digital marketing agency. Write a personalized cold email pitch for this business:
+	prompt := fmt.Sprintf(`You are an expert %s at a digital growth agency.
 
-**Business:** %s
-**Category:** %s  
-**Location:** %s, %s
-**Website:** %s
-**Google Rating:** %.1f stars (%d reviews)
-**Tech Stack:** %s
+Write one highly personalized outreach email that feels human and specific, not generic.
 
-**Issues Found:**
+Lead Profile:
+- Business: %s
+- Category: %s
+- Location: %s
+- Website: %s
+- Google Rating: %.1f stars (%d reviews)
+- Detected Tech Stack: %s
+
+Top Opportunities:
+- %s
+
 %s
 
-%s
+Rules:
+- Tone: warm, confident, and consultative (never pushy)
+- Mention exactly 1 compliment and 1-2 concrete growth gaps from the data above
+- If competitor insight exists, include one tactful benchmark in one short sentence
+- Offer one low-friction next step (free audit, 15-minute teardown, or quick win plan)
+- Keep total body length between 90 and 130 words
+- Avoid buzzwords and avoid making unverifiable claims
+- Plain text only (no markdown, no bullet points)
 
-Instructions:
-- Be conversational and NOT salesy
-- Lead with a specific compliment about their business
-- Mention 1-2 specific issues you noticed (be tactful, not critical)
-- If competitor data is available, tactfully mention how top competitors are performing better (e.g., "I noticed [Competitor] in your area has 3x more reviews" or "Their website loads 2x faster")
-- Offer a free audit or consultation
-- Keep it under 150 words
-- Include a clear call to action
-- Sign off professionally`,
+Return exactly this format:
+Subject: <short subject line under 8 words>
+Email: <single-paragraph email body>
+`,
 		persona,
-		lead.Title,
-		lead.Category,
-		lead.City, lead.Country,
-		lead.Website,
+		businessName,
+		category,
+		location,
+		website,
 		lead.ReviewRating, lead.ReviewCount,
 		techStr,
 		strings.Join(issues, "\n- "),
 		competitorSection,
 	)
 
-	if apiKey == "" {
-		return prompt, nil
-	}
-
 	if provider == "" {
 		provider = "gemini"
+	}
+	provider = strings.ToLower(strings.TrimSpace(provider))
+
+	// Local mode generates a deterministic pitch without any model/API dependency.
+	if provider == "local" || strings.TrimSpace(apiKey) == "" {
+		return generateLocalPitch(lead, issues, competitorSection), nil
 	}
 
 	switch provider {
@@ -491,6 +506,90 @@ Instructions:
 	default:
 		return e.callOpenAICompatible(ctx, prompt, apiKey, provider, modelName)
 	}
+}
+
+func generateLocalPitch(lead *Lead, issues []string, competitorSection string) string {
+	businessName := strings.TrimSpace(lead.Title)
+	if businessName == "" {
+		businessName = "your business"
+	}
+
+	greeting := businessName
+	if businessName == "your business" {
+		greeting = "there"
+	}
+
+	location := strings.TrimSpace(lead.City)
+	if location == "" {
+		location = "your area"
+	}
+
+	compliment := fmt.Sprintf("I like how %s is positioned in %s.", businessName, location)
+	if lead.ReviewRating >= 4.2 && lead.ReviewCount > 0 {
+		compliment = fmt.Sprintf("Your %.1f-star rating across %d reviews stands out.", lead.ReviewRating, lead.ReviewCount)
+	}
+
+	opportunity := "you can likely improve lead capture and conversion from local search traffic"
+	if len(issues) > 0 {
+		opportunity = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(issues[0]), "."))
+	}
+
+	benchmark := ""
+	if insight := firstCompetitorInsight(competitorSection); insight != "" {
+		benchmark = " I also noticed " + insight + "."
+	}
+
+	subject := fmt.Sprintf("Quick idea for %s", businessName)
+	body := fmt.Sprintf("Hi %s, %s From a quick review, %s. I can share a short plan with 2 practical fixes you can apply this month to improve calls and form leads.%s If you are open, I can send a free 10-point audit and walk you through it in 15 minutes.", greeting, compliment, opportunity, benchmark)
+
+	return fmt.Sprintf("Subject: %s\nEmail: %s", subject, body)
+}
+
+func firstCompetitorInsight(section string) string {
+	for _, line := range strings.Split(section, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "-") {
+			insight := strings.TrimSpace(strings.TrimPrefix(line, "-"))
+			insight = strings.ReplaceAll(insight, "\"", "")
+			insight = strings.TrimSpace(strings.TrimSuffix(insight, "."))
+			if insight != "" {
+				return insight
+			}
+		}
+	}
+	return ""
+}
+
+func buildLeadIssues(lead *Lead) []string {
+	var issues []string
+	for _, tag := range lead.ServiceTags {
+		switch tag {
+		case "No Website":
+			issues = append(issues, "No website is listed, which limits discoverability and conversions")
+		case "No SSL":
+			issues = append(issues, "Website is missing SSL/HTTPS trust signals")
+		case "No Analytics":
+			issues = append(issues, "No analytics setup detected, so conversion tracking is likely missing")
+		case "Missing Pixel":
+			issues = append(issues, "No Meta/Facebook pixel detected for retargeting")
+		case "Needs SEO":
+			issues = append(issues, "Core SEO elements are weak (for example, missing key metadata)")
+		case "Low Rating":
+			issues = append(issues, fmt.Sprintf("Average rating is %.1f, which may reduce inbound trust", lead.ReviewRating))
+		case "Few Reviews":
+			issues = append(issues, fmt.Sprintf("Only %d reviews, leaving social proof lower than local leaders", lead.ReviewCount))
+		case "Unclaimed GMB":
+			issues = append(issues, "Google Business Profile may be unclaimed, reducing local search control")
+		case "Slow Website":
+			issues = append(issues, "Site speed appears slow, which can hurt rankings and lead quality")
+		}
+	}
+
+	if len(issues) == 0 {
+		issues = append(issues, "Opportunity to strengthen local lead capture and conversion flow")
+	}
+
+	return issues
 }
 
 // buildCompetitorAnalysis fetches market leaders and builds competitive insights.
@@ -512,10 +611,10 @@ func (e *Enricher) buildCompetitorAnalysis(ctx context.Context, lead *Lead) stri
 
 	// Review comparison
 	if marketLeader.ReviewCount > lead.ReviewCount*2 {
-		multiplier := float64(marketLeader.ReviewCount) / float64(lead.ReviewCount)
 		if lead.ReviewCount == 0 {
 			insights = append(insights, fmt.Sprintf("Market leader \"%s\" has %d reviews while this business has none", marketLeader.Title, marketLeader.ReviewCount))
 		} else {
+			multiplier := float64(marketLeader.ReviewCount) / float64(lead.ReviewCount)
 			insights = append(insights, fmt.Sprintf("Market leader \"%s\" has %.0fx more reviews (%d vs %d)", marketLeader.Title, multiplier, marketLeader.ReviewCount, lead.ReviewCount))
 		}
 	}

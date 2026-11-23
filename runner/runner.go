@@ -138,7 +138,7 @@ func ParseConfig() *Config {
 	flag.IntVar(&cfg.Zoom, "zoom", 15, "set zoom level (0-21) for search")
 	flag.BoolVar(&cfg.WebRunner, "web", false, "run web server instead of crawling")
 	flag.BoolVar(&cfg.LeadsManagerRunner, "leads-manager", false, "run Leads Manager web app")
-	flag.BoolVar(&cfg.BothRunner, "both", true, "run scraper web and leads manager together")
+	flag.BoolVar(&cfg.BothRunner, "both", false, "run scraper web and leads manager together [default: false]")
 	defaultDataFolder := "webdata"
 	if df := os.Getenv("DATA_FOLDER"); df != "" {
 		defaultDataFolder = df

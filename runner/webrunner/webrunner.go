@@ -95,55 +95,94 @@ func (w *webrunner) Run(ctx context.Context) error {
 	// Auto-open browser after server is ready
 	go func() {
 		url := "http://localhost" + w.cfg.Addr
-		// Wait for server to be ready
-		for i := 0; i < 30; i++ {
-			time.Sleep(100 * time.Millisecond)
-			resp, err := http.Get(url + "/health")
-			if err == nil {
-				resp.Body.Close()
-				break
+
+		// Wait for server to be ready with longer timeout
+		readyTimeout := time.NewTimer(10 * time.Second)
+		defer readyTimeout.Stop()
+
+		ticker := time.NewTicker(100 * time.Millisecond)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				resp, err := http.Get(url + "/health")
+				if err == nil {
+					resp.Body.Close()
+					// Server is ready, try to open browser
+					log.Printf("[BROWSER] Opening %s", url)
+					if err := openBrowser(url); err != nil {
+						log.Printf("[BROWSER] Failed to open browser: %v", err)
+						log.Printf("[BROWSER] Please manually open: %s", url)
+					} else {
+						log.Printf("[BROWSER] Browser opened successfully")
+					}
+					return
+				}
+			case <-readyTimeout.C:
+				log.Printf("[BROWSER] Server not ready after 10 seconds, skipping auto-open")
+				log.Printf("[BROWSER] Please manually open: %s", url)
+				return
 			}
 		}
-		openBrowser(url)
 	}()
 
 	return egroup.Wait()
 }
 
 // openBrowser opens the specified URL in app mode window
-func openBrowser(url string) {
+func openBrowser(url string) error {
 	var cmd *exec.Cmd
 
 	switch runtime.GOOS {
 	case "windows":
 		edgePath := findEdgePath()
 		if edgePath != "" {
+			log.Printf("[BROWSER] Using Edge: %s", edgePath)
 			cmd = exec.Command(edgePath, "--app="+url, "--window-size=1200,800")
 		} else {
-			cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+			// Try Chrome as fallback
+			chromePath := findChromePath()
+			if chromePath != "" {
+				log.Printf("[BROWSER] Using Chrome: %s", chromePath)
+				cmd = exec.Command(chromePath, "--app="+url, "--window-size=1200,800")
+			} else {
+				log.Printf("[BROWSER] No browser found, using rundll32")
+				cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+			}
 		}
 	case "darwin":
 		chromePath := "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 		if _, err := os.Stat(chromePath); err == nil {
+			log.Printf("[BROWSER] Using Chrome: %s", chromePath)
 			cmd = exec.Command(chromePath, "--app="+url, "--window-size=1200,800")
 		} else {
+			log.Printf("[BROWSER] Using default open command")
 			cmd = exec.Command("open", url)
 		}
 	default:
 		for _, browser := range []string{"google-chrome", "chromium-browser", "chromium"} {
 			if path, err := exec.LookPath(browser); err == nil {
+				log.Printf("[BROWSER] Using %s: %s", browser, path)
 				cmd = exec.Command(path, "--app="+url, "--window-size=1200,800")
 				break
 			}
 		}
 		if cmd == nil {
+			log.Printf("[BROWSER] Using xdg-open")
 			cmd = exec.Command("xdg-open", url)
 		}
 	}
 
-	if err := cmd.Start(); err != nil {
-		log.Printf("Failed to open browser: %v", err)
+	if cmd == nil {
+		return fmt.Errorf("no browser command created")
 	}
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("start browser: %w", err)
+	}
+
+	return nil
 }
 
 // findEdgePath finds Microsoft Edge executable on Windows
@@ -160,14 +199,18 @@ func findEdgePath() string {
 		}
 	}
 
-	// Try Chrome as fallback
-	chromePaths := []string{
+	return ""
+}
+
+// findChromePath finds Google Chrome executable on Windows
+func findChromePath() string {
+	paths := []string{
 		filepath.Join(os.Getenv("ProgramFiles"), "Google", "Chrome", "Application", "chrome.exe"),
 		filepath.Join(os.Getenv("ProgramFiles(x86)"), "Google", "Chrome", "Application", "chrome.exe"),
 		filepath.Join(os.Getenv("LocalAppData"), "Google", "Chrome", "Application", "chrome.exe"),
 	}
 
-	for _, p := range chromePaths {
+	for _, p := range paths {
 		if _, err := os.Stat(p); err == nil {
 			return p
 		}
@@ -229,28 +272,45 @@ func (w *webrunner) work(ctx context.Context) error {
 }
 
 func (w *webrunner) scrapeJob(ctx context.Context, job *web.Job) error {
-	job.Status = web.StatusWorking
+	persistJob := func(errMsg string) error {
+		persistCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
 
-	err := w.svc.Update(ctx, job)
-	if err != nil {
+		if errMsg != "" {
+			job.Error = errMsg
+			log.Printf("[JOB %s] ERROR: %s | Status: %s", job.ID, errMsg, job.Status)
+		}
+		job.CompletedAt = time.Now().UTC()
+
+		if err := w.svc.Update(persistCtx, job); err != nil {
+			return fmt.Errorf("persist job %s status %q: %w", job.ID, job.Status, err)
+		}
+
+		return nil
+	}
+
+	log.Printf("[JOB %s] Starting scrape job: %q (keywords: %d, lang: %s)",
+		job.ID, job.Name, len(job.Data.Keywords), job.Data.Lang)
+
+	job.Status = web.StatusWorking
+	if err := persistJob(""); err != nil {
 		return err
 	}
 
 	if len(job.Data.Keywords) == 0 {
 		job.Status = web.StatusFailed
-
-		return w.svc.Update(ctx, job)
+		errMsg := "no keywords provided"
+		log.Printf("[JOB %s] FAILURE: %s", job.ID, errMsg)
+		return persistJob(errMsg)
 	}
 
 	mate, err := w.setupMate(ctx, job)
 	if err != nil {
 		job.Status = web.StatusFailed
-
-		err2 := w.svc.Update(ctx, job)
-		if err2 != nil {
-			log.Printf("failed to update job status: %v", err2)
+		errMsg := fmt.Sprintf("setup failed: %v", err)
+		if err2 := persistJob(errMsg); err2 != nil {
+			log.Printf("[JOB %s] failed to update job status: %v", job.ID, err2)
 		}
-
 		return err
 	}
 
@@ -263,6 +323,9 @@ func (w *webrunner) scrapeJob(ctx context.Context, job *web.Job) error {
 
 	dedup := deduper.New()
 	exitMonitor := exiter.New()
+
+	log.Printf("[JOB %s] Creating seed jobs with depth=%d, coords=%q, zoom=%d",
+		job.ID, job.Data.Depth, coords, job.Data.Zoom)
 
 	seedJobs, err := runner.CreateSeedJobs(
 		job.Data.FastMode,
@@ -284,13 +347,15 @@ func (w *webrunner) scrapeJob(ctx context.Context, job *web.Job) error {
 		w.cfg.ExtraReviews,
 	)
 	if err != nil {
-		err2 := w.svc.Update(ctx, job)
-		if err2 != nil {
-			log.Printf("failed to update job status: %v", err2)
+		job.Status = web.StatusFailed
+		errMsg := fmt.Sprintf("create seed jobs failed: %v", err)
+		if err2 := persistJob(errMsg); err2 != nil {
+			log.Printf("[JOB %s] failed to update job status: %v", job.ID, err2)
 		}
-
 		return err
 	}
+
+	log.Printf("[JOB %s] Created %d seed jobs", job.ID, len(seedJobs))
 
 	if len(seedJobs) > 0 {
 		exitMonitor.SetSeedCount(len(seedJobs))
@@ -305,7 +370,8 @@ func (w *webrunner) scrapeJob(ctx context.Context, job *web.Job) error {
 			}
 		}
 
-		log.Printf("running job %s with %d seed jobs and %d allowed seconds", job.ID, len(seedJobs), allowedSeconds)
+		log.Printf("[JOB %s] Running scrape with %d seed jobs, max %d seconds, concurrency=%d",
+			job.ID, len(seedJobs), allowedSeconds, w.cfg.Concurrency)
 
 		mateCtx, cancel := context.WithTimeout(ctx, time.Duration(allowedSeconds)*time.Second)
 		defer cancel()
@@ -314,32 +380,80 @@ func (w *webrunner) scrapeJob(ctx context.Context, job *web.Job) error {
 
 		go exitMonitor.Run(mateCtx)
 
-		err = mate.Start(mateCtx, seedJobs...)
-		if err != nil && !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
+		log.Printf("[JOB %s] Starting scrapemate...", job.ID)
+		startErr := mate.Start(mateCtx, seedJobs...)
+		wasInterrupted := errors.Is(startErr, context.Canceled) || errors.Is(startErr, context.DeadlineExceeded) ||
+			mateCtx.Err() != nil || ctx.Err() != nil
+		if startErr != nil && !errors.Is(startErr, context.DeadlineExceeded) && !errors.Is(startErr, context.Canceled) {
 			cancel()
 
-			err2 := w.svc.Update(ctx, job)
-			if err2 != nil {
-				log.Printf("failed to update job status: %v", err2)
+			job.Status = web.StatusFailed
+			errMsg := fmt.Sprintf("scraping failed: %v", startErr)
+			if err2 := persistJob(errMsg); err2 != nil {
+				log.Printf("[JOB %s] failed to update job status: %v", job.ID, err2)
 			}
 
-			return err
+			return startErr
 		}
 
-		cancel()
+		if wasInterrupted {
+			job.Status = web.StatusFailed
+			job.Error = "job aborted: shutdown"
+			if errors.Is(startErr, context.DeadlineExceeded) || errors.Is(mateCtx.Err(), context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				job.Error = "job aborted: timeout"
+			}
+			log.Printf("[JOB %s] Scraping interrupted: %s", job.ID, job.Error)
+		} else {
+			log.Printf("[JOB %s] Scraping completed successfully", job.ID)
+		}
+
+		// DO NOT cancel context yet - writers need time to flush batched results
+		// Instead, let Close() trigger proper writer shutdown
+		log.Printf("[JOB %s] Closing scrapemate and waiting for writers to flush...", job.ID)
+		mate.Close()
+
+		// Give writers a grace period to complete (up to 15 seconds)
+		// They will auto-exit when input channel closes
+		flushCtx, flushCancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer flushCancel()
+
+		// Wait for context to be truly done (writers finishing)
+		select {
+		case <-mateCtx.Done():
+			log.Printf("[JOB %s] Scrapemate context done", job.ID)
+		case <-flushCtx.Done():
+			log.Printf("[JOB %s] Writer flush timeout - continuing anyway", job.ID)
+		case <-time.After(3 * time.Second):
+			log.Printf("[JOB %s] Giving writers extra time to flush", job.ID)
+		}
+
+		cancel() // Now safe to cancel
+
+		if wasInterrupted {
+			if err := persistJob(job.Error); err != nil {
+				log.Printf("[JOB %s] failed to update job status: %v", job.ID, err)
+			}
+
+			if errors.Is(startErr, context.DeadlineExceeded) || errors.Is(mateCtx.Err(), context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				return context.DeadlineExceeded
+			}
+
+			return context.Canceled
+		}
+	} else {
+		log.Printf("[JOB %s] No seed jobs were created", job.ID)
 	}
 
-	mate.Close()
 
 	job.Status = web.StatusOK
-
-	return w.svc.Update(ctx, job)
+	log.Printf("[JOB %s] Job completed successfully", job.ID)
+	return persistJob("")
 }
 
 func (w *webrunner) setupMate(_ context.Context, job *web.Job) (*scrapemateapp.ScrapemateApp, error) {
 	opts := []func(*scrapemateapp.Config) error{
 		scrapemateapp.WithConcurrency(w.cfg.Concurrency),
-		scrapemateapp.WithExitOnInactivity(time.Minute * 3),
+		scrapemateapp.WithExitOnInactivity(w.cfg.ExitOnInactivityDuration),
 	}
 
 	if !job.Data.FastMode {
@@ -374,6 +488,12 @@ func (w *webrunner) setupMate(_ context.Context, job *web.Job) (*scrapemateapp.S
 	log.Printf("job %s has proxy: %v", job.ID, hasProxy)
 
 	var writers []scrapemate.ResultWriter
+	csvPath := filepath.Join(w.cfg.DataFolder, job.ID+".csv")
+	csvWriter, err := newCSVJobWriter(csvPath)
+	if err != nil {
+		return nil, fmt.Errorf("create csv writer: %w", err)
+	}
+	writers = append(writers, csvWriter)
 
 	disableLocal := os.Getenv("DISABLE_LOCAL_DB") == "true"
 	if !disableLocal {

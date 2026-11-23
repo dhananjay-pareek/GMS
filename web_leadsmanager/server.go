@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -166,9 +167,57 @@ func (s *Server) Start(ctx context.Context) error {
 		}
 	}()
 
+	// Extract host and port from addr
+	addrStr := s.srv.Addr
+	if addrStr == "" {
+		addrStr = ":9090"
+	}
+	host := ""
+	portStr := ""
+
+	// Poor man's split, but we can assume net.SplitHostPort won't fail since the addr should be valid
+	parts := strings.Split(addrStr, ":")
+	if len(parts) >= 2 {
+		portStr = parts[len(parts)-1]
+		host = strings.Join(parts[:len(parts)-1], ":")
+	} else {
+		// fallback
+		portStr = parts[0]
+	}
+
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		fmt.Printf("🚀 Leads Manager → http://localhost%s\n", s.srv.Addr)
+		err := s.srv.ListenAndServe()
+		if err != nil && err != http.ErrServerClosed {
+			return err
+		}
+		return nil
+	}
+
+	importNet := false
+	_ = importNet // just to satisfy linter if net isn't imported later
+
+	var listener net.Listener
+	for i := 0; i < 10; i++ {
+		tryPort := port + i
+		tryAddr := fmt.Sprintf("%s:%d", host, tryPort)
+		l, errListen := net.Listen("tcp", tryAddr)
+		if errListen == nil {
+			listener = l
+			s.srv.Addr = tryAddr
+			break
+		}
+		log.Printf("Port %d is busy, trying next port...", tryPort)
+	}
+
+	if listener == nil {
+		return fmt.Errorf("could not find an open port starting from %d", port)
+	}
+
 	fmt.Printf("🚀 Leads Manager → http://localhost%s\n", s.srv.Addr)
 
-	err := s.srv.ListenAndServe()
+	err = s.srv.Serve(listener)
 	if err != nil && err != http.ErrServerClosed {
 		return err
 	}

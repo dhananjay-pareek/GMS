@@ -1,5 +1,5 @@
 <tr>
-    <td class="text-mono" style="padding-left: 1.5rem;">{{.ID}}</td>
+    <td class="text-mono" style="padding-left: 1.5rem; font-size: 0.85rem;">{{.ID}}</td>
     <td style="font-weight: 500;">{{.Name}}</td>
     <td class="text-sm" style="max-width: 250px;">
         <details>
@@ -10,18 +10,28 @@
                 {{range $i, $kw := .Data.Keywords}}{{if gt $i 0}}<br>{{end}}{{$kw}}{{end}}</div>
         </details>
     </td>
-    <td style="color: var(--text-muted);">{{.Date.Format "Jan 02 15:04"}}</td>
+    <td style="color: var(--text-muted); font-size: 0.9rem;">{{.Date.Format "Jan 02 15:04"}}</td>
     <td>
-        <span class="status-badge status-{{.Status}}">
+        <span class="status-badge status-{{.Status}}" style="position: relative;" title="{{if .Error}}Error: {{.Error}}{{end}}">
             {{if eq .Status "ok"}}
-            <svg class="icon-sm" fill="currentColor" viewBox="0 0 20 20">
+            <svg class="icon-sm" fill="currentColor" viewBox="0 0 20 20" style="display: inline-block; margin-right: 4px;">
                 <path fill-rule="evenodd"
                     d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
                     clip-rule="evenodd"></path>
             </svg>
             {{end}}
+            {{if eq .Status "failed"}}
+            <svg class="icon-sm" fill="currentColor" viewBox="0 0 20 20" style="display: inline-block; margin-right: 4px;">
+                <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+            </svg>
+            {{end}}
             {{.Status}}
         </span>
+        {{if and (eq .Status "failed") .Error}}
+        <div style="margin-top: 6px; padding: 8px; background: #fee; border-left: 3px solid #f00; border-radius: 3px; font-size: 0.8rem; color: #c00; max-width: 300px; word-break: break-word;">
+            <strong>Error:</strong> {{.Error}}
+        </div>
+        {{end}}
     </td>
     <td style="padding-right: 1.5rem;">
         <div class="actions-cell">

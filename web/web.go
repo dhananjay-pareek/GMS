@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -186,9 +187,52 @@ func (s *Server) Start(ctx context.Context) error {
 		log.Println("server stopped")
 	}()
 
+	// Extract host and port from addr
+	addrStr := s.srv.Addr
+	if addrStr == "" {
+		addrStr = ":8080"
+	}
+	host := ""
+	portStr := ""
+
+	parts := strings.Split(addrStr, ":")
+	if len(parts) >= 2 {
+		portStr = parts[len(parts)-1]
+		host = strings.Join(parts[:len(parts)-1], ":")
+	} else {
+		portStr = parts[0]
+	}
+
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "visit http://localhost%s\n", s.srv.Addr)
+		err := s.srv.ListenAndServe()
+		if err != nil && err != http.ErrServerClosed {
+			return err
+		}
+		return nil
+	}
+
+	var listener net.Listener
+	for i := 0; i < 10; i++ {
+		tryPort := port + i
+		tryAddr := fmt.Sprintf("%s:%d", host, tryPort)
+		l, errListen := net.Listen("tcp", tryAddr)
+		if errListen == nil {
+			listener = l
+			s.srv.Addr = tryAddr
+			break
+		}
+		log.Printf("Port %d is busy, trying next port...", tryPort)
+	}
+
+	if listener == nil {
+		return fmt.Errorf("could not find an open port starting from %d", port)
+	}
+
 	fmt.Fprintf(os.Stderr, "visit http://localhost%s\n", s.srv.Addr)
 
-	err := s.srv.ListenAndServe()
+	err = s.srv.Serve(listener)
 	if err != nil && err != http.ErrServerClosed {
 		return err
 	}
@@ -197,22 +241,22 @@ func (s *Server) Start(ctx context.Context) error {
 }
 
 type formData struct {
-	Name          string
-	MaxTime       string
-	Keywords      []string
-	Language      string
-	Zoom          int
-	FastMode      bool
-	Radius        int
-	Lat           string
-	Lon           string
-	Depth         int
-	Email         bool
-	Proxies       []string
-	LeadsURL      string
-	LLMProvider   string
-	LLMAPIKey     string
-	LLMModel      string
+	Name        string
+	MaxTime     string
+	Keywords    []string
+	Language    string
+	Zoom        int
+	FastMode    bool
+	Radius      int
+	Lat         string
+	Lon         string
+	Depth       int
+	Email       bool
+	Proxies     []string
+	LeadsURL    string
+	LLMProvider string
+	LLMAPIKey   string
+	LLMModel    string
 }
 
 type ctxKey string
@@ -264,19 +308,19 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := formData{
-		Name:          "",
-		MaxTime:       "10m",
-		Keywords:      []string{},
-		Language:      "en",
-		Zoom:          15,
-		FastMode:      false,
-		Radius:        10000,
-		Lat:           "0",
-		Lon:           "0",
-		Depth:         10,
-		Email:         false,
-		LeadsURL:      s.leadsURL,
-		LLMProvider:   s.llmProvider,
+		Name:        "",
+		MaxTime:     "10m",
+		Keywords:    []string{},
+		Language:    "en",
+		Zoom:        15,
+		FastMode:    false,
+		Radius:      10000,
+		Lat:         "0",
+		Lon:         "0",
+		Depth:       10,
+		Email:       false,
+		LeadsURL:    s.leadsURL,
+		LLMProvider: s.llmProvider,
 		LLMAPIKey: func() string {
 			if s.llmProvider == "ollama" && s.llmAPIKey == "" {
 				return s.ollamaURL
@@ -1039,7 +1083,9 @@ func callOllama(host, model, prompt string) (string, error) {
 		"stream": false,
 	}
 
-	respBody, err := doJSON(http.MethodPost, host+"/api/generate", body, nil)
+	// Ollama can take longer than the default HTTP timeout while the model loads
+	// or when it is generating a long response, so give it extra time.
+	respBody, err := doJSONWithTimeout(http.MethodPost, host+"/api/generate", body, nil, 5*time.Minute)
 	if err != nil {
 		return "", err
 	}
@@ -1060,6 +1106,10 @@ func callOllama(host, model, prompt string) (string, error) {
 // ─── HTTP helper ─────────────────────────────────────────────────────────────
 
 func doJSON(method, url string, body any, headers map[string]string) ([]byte, error) {
+	return doJSONWithTimeout(method, url, body, headers, 60*time.Second)
+}
+
+func doJSONWithTimeout(method, url string, body any, headers map[string]string, timeout time.Duration) ([]byte, error) {
 	payload, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
@@ -1074,7 +1124,7 @@ func doJSON(method, url string, body any, headers map[string]string) ([]byte, er
 		req.Header.Set(k, v)
 	}
 
-	client := &http.Client{Timeout: 60 * time.Second}
+	client := &http.Client{Timeout: timeout}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)

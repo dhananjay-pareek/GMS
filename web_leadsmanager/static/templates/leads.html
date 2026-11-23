@@ -22,6 +22,7 @@
             <nav class="top-nav">
                 <label for="llm-provider" class="sr-only">LLM Provider</label>
                 <select id="llm-provider" class="nav-select" aria-label="Select LLM Provider">
+                    <option value="local">Local (No API)</option>
                     <option value="gemini">Gemini (Google)</option>
                     <option value="openai">OpenAI (GPT-4o)</option>
                     <option value="anthropic">Anthropic (Claude)</option>
@@ -297,9 +298,6 @@
 
             const titles = {
                 techstack: '🔧 Tech Stack',
-                pagespeed: '⚡ PageSpeed Results',
-                screenshot: '📸 Screenshot',
-                contacts: '👤 Contacts Found',
                 pitch: '✉️ AI Pitch'
             };
 
@@ -310,10 +308,10 @@
                     const provider = document.getElementById('llm-provider').value;
                     const modelName = document.getElementById('llm-model').value;
                     url += `&provider=${encodeURIComponent(provider)}`;
-                    if (apiKey) {
+                    if (provider !== 'local' && apiKey) {
                         url += `&api_key=${encodeURIComponent(apiKey)}`;
                     }
-                    if (modelName) {
+                    if (provider !== 'local' && modelName) {
                         url += `&model=${encodeURIComponent(modelName)}`;
                     }
                 }
@@ -325,18 +323,10 @@
 
                 if (data.error) {
                     showModal(titles[action] || 'Error', `<div class="modal-error">${data.error}</div>`);
-                } else if (action === 'screenshot') {
-                    showModal(titles[action], `<img src="${data.url}" class="screenshot-img" alt="Website screenshot" />`);
                 } else if (action === 'pitch') {
-                    showModal(titles[action], `<div class="pitch-prompt">${data.prompt.replace(/\n/g, '<br>')}</div>
+                    const safePrompt = escapeHTML(data.prompt || '').replace(/\n/g, '<br>');
+                    showModal(titles[action], `<div class="pitch-prompt">${safePrompt}</div>
                         <button class="btn-copy" onclick="copyToClipboard(this)" data-text="${encodeURIComponent(data.prompt)}">📋 Copy Prompt</button>`);
-                } else if (action === 'contacts') {
-                    let html = '<div class="contact-results">';
-                    if (data.emails && data.emails.length) html += `<div class="contact-section"><strong>📧 Emails:</strong><ul>${data.emails.map(e => `<li>${e}</li>`).join('')}</ul></div>`;
-                    if (data.phones && data.phones.length) html += `<div class="contact-section"><strong>📞 Phones:</strong><ul>${data.phones.map(p => `<li>${p}</li>`).join('')}</ul></div>`;
-                    if (data.linkedin_urls && data.linkedin_urls.length) html += `<div class="contact-section"><strong>💼 LinkedIn:</strong><ul>${data.linkedin_urls.map(l => `<li><a href="${l}" target="_blank">${l}</a></li>`).join('')}</ul></div>`;
-                    html += '</div>';
-                    showModal(titles[action], html);
                 } else {
                     showModal(titles[action], `<pre class="result-json">${JSON.stringify(data, null, 2)}</pre>`);
                 }
@@ -364,6 +354,15 @@
                 btn.textContent = '✅ Copied!';
                 setTimeout(() => btn.textContent = '📋 Copy Prompt', 2000);
             });
+        }
+
+        function escapeHTML(text) {
+            return text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
         }
 
         // Close modal on backdrop click

@@ -29,11 +29,13 @@ type JobRepository interface {
 }
 
 type Job struct {
-	ID     string
-	Name   string
-	Date   time.Time
-	Status string
-	Data   JobData
+	ID          string
+	Name        string
+	Date        time.Time
+	Status      string
+	Data        JobData
+	Error       string    `json:"error,omitempty"`        // Failure reason if job fails
+	CompletedAt time.Time `json:"completed_at,omitempty"` // When job completed (ok or failed)
 }
 
 func (j *Job) Validate() error {
